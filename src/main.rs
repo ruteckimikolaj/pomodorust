@@ -5,7 +5,7 @@ use std::{
 
 use chrono::Duration as ChronoDuration;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -16,7 +16,9 @@ use ratatui::{
 use rodio::{source::SineWave, OutputStream, Sink, Source};
 
 mod app;
+mod settings;
 use app::{App, InputMode, Mode, TimerState, View};
+use settings::draw_settings;
 
 /// Main function to run the application.
 fn main() -> io::Result<()> {
@@ -62,16 +64,7 @@ fn run_app(
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    match app.input_mode {
-                        InputMode::Normal => match app.current_view {
-                            View::Timer => handle_timer_input(key.code, app),
-                            View::TaskList => handle_tasklist_input(key.code, app),
-                            View::Statistics => handle_stats_input(key.code, app),
-                        },
-                        InputMode::Editing => handle_editing_input(key.code, app),
-                    }
-                }
+                handle_key_event(key, app);
             }
         }
 
@@ -98,6 +91,29 @@ fn run_app(
             app.save();
             return Ok(());
         }
+    }
+}
+
+/// Central key event handler.
+fn handle_key_event(key: KeyEvent, app: &mut App) {
+    if key.kind != crossterm::event::KeyEventKind::Press {
+        return;
+    }
+
+    // Global keybinding to open settings
+    if let KeyCode::Char('o') = key.code {
+        app.current_view = View::Settings;
+        return;
+    }
+
+    match app.input_mode {
+        InputMode::Normal => match app.current_view {
+            View::Timer => handle_timer_input(key.code, app),
+            View::TaskList => handle_tasklist_input(key.code, app),
+            View::Statistics => handle_stats_input(key.code, app),
+            View::Settings => handle_settings_input(key.code, app),
+        },
+        InputMode::Editing => handle_editing_input(key.code, app),
     }
 }
 
@@ -162,6 +178,19 @@ fn handle_stats_input(key_code: KeyCode, app: &mut App) {
     }
 }
 
+/// Handles key events for the Settings view in Normal mode.
+fn handle_settings_input(key_code: KeyCode, app: &mut App) {
+    match key_code {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Tab => app.current_view = View::Timer,
+        KeyCode::Up | KeyCode::Char('k') => app.previous_setting(),
+        KeyCode::Down | KeyCode::Char('j') => app.next_setting(),
+        KeyCode::Left | KeyCode::Char('h') => app.modify_setting(false),
+        KeyCode::Right | KeyCode::Char('l') => app.modify_setting(true),
+        _ => {}
+    }
+}
+
 /// Handles key events when in Editing mode for task input.
 fn handle_editing_input(key_code: KeyCode, app: &mut App) {
     match key_code {
@@ -175,6 +204,16 @@ fn handle_editing_input(key_code: KeyCode, app: &mut App) {
             app.current_input.clear();
         }
         _ => {}
+    }
+}
+
+/// Renders the user interface based on the current view.
+fn ui(frame: &mut Frame, app: &mut App) {
+    match app.current_view {
+        View::Timer => draw_timer(frame, app),
+        View::TaskList => draw_task_list(frame, app),
+        View::Statistics => draw_statistics(frame, app),
+        View::Settings => draw_settings(frame, app),
     }
 }
 
@@ -209,15 +248,6 @@ fn create_big_text_paragraph<'a>(text: &str, style: Style) -> Paragraph<'a> {
         }
     }
     Paragraph::new(lines).alignment(Alignment::Center)
-}
-
-/// Renders the user interface based on the current view.
-fn ui(frame: &mut Frame, app: &mut App) {
-    match app.current_view {
-        View::Timer => draw_timer(frame, app),
-        View::TaskList => draw_task_list(frame, app),
-        View::Statistics => draw_statistics(frame, app),
-    }
 }
 
 /// Renders the Timer view.
@@ -320,7 +350,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     );
 
     // Progress Bar
-    let total_duration = app.mode.duration().as_secs_f64();
+    let total_duration = app.mode.duration(&app.settings).as_secs_f64();
     let remaining_duration = app.time_remaining.as_secs_f64();
     let progress_ratio = if total_duration > 0.0 {
         (total_duration - remaining_duration) / total_duration
@@ -341,9 +371,9 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     );
 
     let help_text = if main_layout[2].width > 80 {
-        " [Tab] Tasks | [Space] Start/Pause | [r] Reset | [p/s/l] Change Mode | [q] Quit "
+        " [Tab] Tasks | [o] Options | [Space] Start/Pause | [r] Reset | [p/s/l] Change Mode | [q] Quit "
     } else {
-        " [Tab] [Spc] [r] [p/s/l] [q] "
+        " [Tab] [o] [Spc] [r] [p/s/l] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)
@@ -364,10 +394,10 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Length(3), // Title
-                Constraint::Min(0),    // Main content
-                Constraint::Length(3), // Input or padding
-                Constraint::Length(4), // Help
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Length(3),
+                Constraint::Length(4),
             ]
             .as_ref(),
         )
@@ -458,7 +488,6 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
         chunks[0],
     );
 
-    // Summary block
     let total_time_spent: Duration = app.tasks.iter().map(|t| t.time_spent).sum();
     let time_spent_formatted = format!(
         "{}h {}m",
@@ -476,7 +505,6 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
         chunks[1],
     );
 
-    // Completed tasks list
     let completed_tasks: Vec<_> = app
         .tasks
         .iter()
