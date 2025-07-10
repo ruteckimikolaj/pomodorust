@@ -140,6 +140,12 @@ fn handle_tasklist_input(key_code: KeyCode, app: &mut App) {
         KeyCode::Down | KeyCode::Char('j') => app.next_task(),
         KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
         KeyCode::Enter => app.complete_active_task(),
+        KeyCode::Char(' ') => {
+            if app.active_task_index.is_some() {
+                app.state = TimerState::Running;
+                app.current_view = View::Timer;
+            }
+        }
         _ => {}
     }
 }
@@ -318,7 +324,7 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
         .split(frame.size());
 
     frame.render_widget(
-        Block::default().title(Title::from("Tasks").alignment(Alignment::Center)),
+        Block::default().title(Title::from("✅ Tasks").alignment(Alignment::Center)),
         chunks[0],
     );
 
@@ -365,9 +371,9 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
     let help_text = match app.input_mode {
         InputMode::Normal => {
             if chunks[3].width > 80 {
-                " [Tab] Stats | [↑/↓] Navigate | [n] New Task | [Enter] Complete Task | [q] Quit "
+                " [Tab] Stats | [Space] Start | [↑/↓] Navigate | [n] New | [Enter] Complete | [q] Quit "
             } else {
-                " [Tab] [↑/↓] [n] [Ent] [q] "
+                " [Tab] [Spc] [↑/↓] [n] [Ent] [q] "
             }
         }
         InputMode::Editing => " [Enter] Submit | [Esc] Cancel ",
@@ -398,7 +404,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
         .split(frame.size());
 
     frame.render_widget(
-        Block::default().title(Title::from("Statistics").alignment(Alignment::Center)),
+        Block::default().title(Title::from("📊 Statistics").alignment(Alignment::Center)),
         chunks[0],
     );
 
