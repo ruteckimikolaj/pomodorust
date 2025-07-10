@@ -14,132 +14,14 @@ use ratatui::{
     widgets::{block::*, *},
 };
 
-/// Represents the different timer modes in the Pomodoro technique.
-#[derive(Clone, Copy, PartialEq)]
-enum Mode {
-    Pomodoro,
-    ShortBreak,
-    LongBreak,
-}
-
-impl Mode {
-    /// Returns the duration of the timer mode.
-    fn duration(&self) -> Duration {
-        match self {
-            Mode::Pomodoro => Duration::from_secs(25 * 60),
-            Mode::ShortBreak => Duration::from_secs(5 * 60),
-            Mode::LongBreak => Duration::from_secs(15 * 60),
-        }
-    }
-
-    /// Returns the title of the timer mode.
-    fn title(&self) -> &'static str {
-        match self {
-            Mode::Pomodoro => "Pomodoro",
-            Mode::ShortBreak => "Short Break",
-            Mode::LongBreak => "Long Break",
-        }
-    }
-}
-
-/// Represents the current state of the timer.
-#[derive(Clone, Copy, PartialEq)]
-enum TimerState {
-    Paused,
-    Running,
-}
-
-/// The main application state.
-struct App {
-    mode: Mode,
-    state: TimerState,
-    time_remaining: Duration,
-    last_tick: Instant,
-    pomodoros_completed: u32,
-    should_quit: bool,
-}
-
-impl App {
-    /// Creates a new App instance.
-    fn new() -> Self {
-        Self {
-            mode: Mode::Pomodoro,
-            state: TimerState::Paused,
-            time_remaining: Mode::Pomodoro.duration(),
-            last_tick: Instant::now(),
-            pomodoros_completed: 0,
-            should_quit: false,
-        }
-    }
-
-    /// Updates the application state on each tick.
-    fn on_tick(&mut self) {
-        if let TimerState::Running = self.state {
-            let now = Instant::now();
-            let elapsed = now.duration_since(self.last_tick);
-            self.last_tick = now;
-
-            if let Some(remaining) = self.time_remaining.checked_sub(elapsed) {
-                self.time_remaining = remaining;
-            } else {
-                self.time_remaining = Duration::from_secs(0);
-                self.next_mode();
-            }
-        }
-    }
-    
-    /// Toggles the timer between running and paused states.
-    fn toggle_timer(&mut self) {
-        match self.state {
-            TimerState::Paused => {
-                self.state = TimerState::Running;
-                self.last_tick = Instant::now();
-            }
-            TimerState::Running => self.state = TimerState::Paused,
-        }
-    }
-
-    /// Resets the timer to the current mode's full duration.
-    fn reset_timer(&mut self) {
-        self.state = TimerState::Paused;
-        self.time_remaining = self.mode.duration();
-    }
-
-    /// Switches to the next appropriate timer mode.
-    fn next_mode(&mut self) {
-        if self.mode == Mode::Pomodoro {
-            self.pomodoros_completed += 1;
-            if self.pomodoros_completed % 4 == 0 {
-                self.mode = Mode::LongBreak;
-            } else {
-                self.mode = Mode::ShortBreak;
-            }
-        } else {
-            self.mode = Mode::Pomodoro;
-        }
-        self.reset_timer();
-        // Automatically start the next session
-        self.state = TimerState::Running;
-        self.last_tick = Instant::now();
-    }
-
-    /// Sets the current mode explicitly.
-    fn set_mode(&mut self, mode: Mode) {
-        self.mode = mode;
-        self.reset_timer();
-    }
-}
+mod app;
+use app::{App, InputMode, Mode, TimerState, View};
 
 /// Main function to run the application.
 fn main() -> io::Result<()> {
-    // Setup terminal
     let mut terminal = setup_terminal()?;
-
-    // Create app and run it
     let app = App::new();
     run_app(&mut terminal, app)?;
-
-    // Restore terminal
     restore_terminal(&mut terminal)?;
     Ok(())
 }
@@ -162,40 +44,107 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 
 /// The main application loop.
 fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> io::Result<()> {
+    let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
+
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| ui(f, &mut app))?;
 
         let timeout = tick_rate
-            .checked_sub(app.last_tick.elapsed())
+            .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('q') => app.should_quit = true,
-                        KeyCode::Char(' ') => app.toggle_timer(),
-                        KeyCode::Char('r') => app.reset_timer(),
-                        KeyCode::Char('p') => app.set_mode(Mode::Pomodoro),
-                        KeyCode::Char('s') => app.set_mode(Mode::ShortBreak),
-                        KeyCode::Char('l') => app.set_mode(Mode::LongBreak),
-                        _ => {}
+                    match app.input_mode {
+                        InputMode::Normal => match app.current_view {
+                            View::Timer => handle_timer_input(key.code, &mut app),
+                            View::TaskList => handle_tasklist_input(key.code, &mut app),
+                        },
+                        InputMode::Editing => handle_editing_input(key.code, &mut app),
                     }
                 }
             }
         }
 
-        app.on_tick();
+        if last_tick.elapsed() >= tick_rate {
+            if let TimerState::Running = app.state {
+                let elapsed = last_tick.elapsed();
+                if let Some(remaining) = app.time_remaining.checked_sub(elapsed) {
+                    app.time_remaining = remaining;
+                    if let Some(index) = app.active_task_index {
+                        if let Some(task) = app.tasks.get_mut(index) {
+                            task.time_spent += elapsed;
+                        }
+                    }
+                } else {
+                    app.time_remaining = Duration::from_secs(0);
+                    app.next_mode();
+                }
+            }
+            last_tick = Instant::now();
+        }
+
         if app.should_quit {
             return Ok(());
         }
     }
 }
 
-/// Renders the user interface.
-fn ui(frame: &mut Frame, app: &App) {
-    // === STYLING ===
+/// Handles key events for the Timer view in Normal mode.
+fn handle_timer_input(key_code: KeyCode, app: &mut App) {
+    match key_code {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char(' ') => app.toggle_timer(),
+        KeyCode::Char('r') => app.reset_timer(),
+        KeyCode::Char('p') => app.set_mode(Mode::Pomodoro),
+        KeyCode::Char('s') => app.set_mode(Mode::ShortBreak),
+        KeyCode::Char('l') => app.set_mode(Mode::LongBreak),
+        KeyCode::Tab => app.current_view = View::TaskList,
+        _ => {}
+    }
+}
+
+/// Handles key events for the TaskList view in Normal mode.
+fn handle_tasklist_input(key_code: KeyCode, app: &mut App) {
+    match key_code {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Tab => app.current_view = View::Timer,
+        KeyCode::Char('n') => app.input_mode = InputMode::Editing,
+        KeyCode::Down | KeyCode::Char('j') => app.next_task(),
+        KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
+        KeyCode::Enter => app.complete_active_task(),
+        _ => {}
+    }
+}
+
+/// Handles key events when in Editing mode for task input.
+fn handle_editing_input(key_code: KeyCode, app: &mut App) {
+    match key_code {
+        KeyCode::Enter => app.submit_task(),
+        KeyCode::Char(c) => app.current_input.push(c),
+        KeyCode::Backspace => {
+            app.current_input.pop();
+        }
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            app.current_input.clear();
+        }
+        _ => {}
+    }
+}
+
+/// Renders the user interface based on the current view.
+fn ui(frame: &mut Frame, app: &mut App) {
+    match app.current_view {
+        View::Timer => draw_timer(frame, app),
+        View::TaskList => draw_task_list(frame, app),
+    }
+}
+
+/// Renders the Timer view.
+fn draw_timer(frame: &mut Frame, app: &App) {
     let (accent_color, mode_bg_color) = match app.mode {
         Mode::Pomodoro => (Color::LightRed, Color::Rgb(50, 20, 20)),
         Mode::ShortBreak => (Color::LightGreen, Color::Rgb(20, 50, 20)),
@@ -206,29 +155,21 @@ fn ui(frame: &mut Frame, app: &App) {
     let accent_style = Style::default().fg(accent_color);
     let running_style = Style::default().fg(Color::Green);
     let paused_style = Style::default().fg(Color::Yellow);
-    let key_style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 
-    // === LAYOUT ===
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(0),
-            Constraint::Length(4),
-        ])
+        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
         .split(frame.size());
 
-    // === BLOCKS ===
+    frame.render_widget(
+        Block::default()
+            .title(Title::from(" pomodorust ").alignment(Alignment::Center))
+            .style(base_style),
+        main_layout[0],
+    );
 
-    // --- Title Block ---
-    let title_block = Block::default()
-        .title(block::Title::from("Pomodorust").alignment(Alignment::Center))
-        .style(base_style);
-    frame.render_widget(title_block, main_layout[0]);
-
-    // --- Main Timer Block ---
-    let timer_block_border_style = if matches!(app.state, TimerState::Running) {
-        Style::default().fg(accent_color)
+    let timer_block_border_style = if app.state == TimerState::Running {
+        accent_style
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -244,109 +185,175 @@ fn ui(frame: &mut Frame, app: &App) {
     let timer_area = timer_block.inner(main_layout[1]);
     frame.render_widget(timer_block, main_layout[1]);
 
-    // --- Help/Instructions Block ---
-    let help_block = Block::default()
-        .title("Controls")
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .style(base_style);
-    frame.render_widget(help_block, main_layout[2]);
-
-    // === WIDGETS INSIDE BLOCKS ===
-
-    // --- Widgets inside Timer Block ---
     let timer_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(20),
+            Constraint::Percentage(15),
+            Constraint::Percentage(45),
             Constraint::Percentage(15),
             Constraint::Percentage(15),
+            Constraint::Percentage(10),
         ])
         .margin(1)
         .split(timer_area);
 
-    // Timer Text
-    let time = ChronoDuration::from_std(app.time_remaining).expect("valid duration");
-    let time_text = format!(
-        "{:02}:{:02}",
-        time.num_minutes(),
-        time.num_seconds() % 60
-    );
-    let timer_paragraph = Paragraph::new(time_text)
-        .style(accent_style.add_modifier(Modifier::BOLD))
-        .alignment(Alignment::Center);
-    frame.render_widget(timer_paragraph, timer_layout[0]);
+    let task_name = app
+        .active_task_index
+        .and_then(|i| app.tasks.get(i))
+        .map_or("No active task", |t| &t.name);
 
-    // Status Text
+    frame.render_widget(
+        Paragraph::new(task_name).style(accent_style).alignment(Alignment::Center),
+        timer_layout[0],
+    );
+
+    let time = ChronoDuration::from_std(app.time_remaining).unwrap();
+    frame.render_widget(
+        Paragraph::new(format!("{:02}:{:02}", time.num_minutes(), time.num_seconds() % 60))
+            .style(accent_style.add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center),
+        timer_layout[1],
+    );
+
     let (status_text, status_style) = match app.state {
         TimerState::Running => ("▶ Running", running_style),
         TimerState::Paused => ("⏸ Paused", paused_style),
     };
-    let status_paragraph = Paragraph::new(status_text)
-        .style(status_style)
-        .alignment(Alignment::Center);
-    frame.render_widget(status_paragraph, timer_layout[1]);
+    frame.render_widget(
+        Paragraph::new(status_text).style(status_style).alignment(Alignment::Center),
+        timer_layout[2],
+    );
 
-    // Progress Bar
     let total_duration = app.mode.duration().as_secs_f64();
     let remaining_duration = app.time_remaining.as_secs_f64();
     let progress_ratio = if total_duration > 0.0 {
         (total_duration - remaining_duration) / total_duration
-    } else { 1.0 };
-    let progress_bar = Gauge::default()
-        .gauge_style(accent_style)
-        .ratio(progress_ratio)
-        .label(format!("{:.0}%", progress_ratio * 100.0));
-    frame.render_widget(progress_bar, timer_layout[2]);
+    } else {
+        1.0
+    };
+    frame.render_widget(
+        Gauge::default()
+            .gauge_style(accent_style)
+            .ratio(progress_ratio)
+            .label(format!("{:.0}%", progress_ratio * 100.0)),
+        timer_layout[3],
+    );
 
-    // Pomodoros Completed
-    let sessions_text = format!("🍅 {}", app.pomodoros_completed);
-    let sessions_paragraph = Paragraph::new(sessions_text)
-        .style(accent_style)
-        .alignment(Alignment::Center);
-    frame.render_widget(sessions_paragraph, timer_layout[3]);
+    frame.render_widget(
+        Paragraph::new(format!("🍅 {}", app.pomodoros_completed_total))
+            .style(accent_style)
+            .alignment(Alignment::Center),
+        timer_layout[4],
+    );
 
-    // --- Widgets inside Help Block ---
-    let help_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .horizontal_margin(2)
-        .vertical_margin(1)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
-        .split(main_layout[2]);
-    
-    let left_help_text = Text::from(vec![
-        Line::from(vec![
-            Span::styled("p", key_style),
-            Span::raw("omodoro "),
-            Span::styled("s", key_style),
-            Span::raw("hort break "),
-            Span::styled("l", key_style),
-            Span::raw("ong break"),
-        ]),
-        Line::from(vec![
-            Span::styled("q", key_style),
-            Span::raw("uit"),
-        ]),
-    ]);
-    
-    let right_help_text = Text::from(vec![
-        Line::from(vec![
-            Span::styled("<space>", key_style),
-            Span::raw(" start/pause"),
-        ]),
-        Line::from(vec![
-            Span::styled("r", key_style),
-            Span::raw("eset timer"),
-        ]),
-    ]);
+    let help_text = if main_layout[2].width > 80 {
+        " [Tab] Tasks   [Space] Start/Pause   [r] Reset\n[p] Pomodoro   [s] Short Break   [l] Long Break   [q] Quit "
+    } else if main_layout[2].width > 40 {
+        " [Tab] Tasks   [Space] Start/Pause\n[r] Reset   [p/s/l] Mode   [q] Quit "
+    } else {
+        "[Tab][Spc][r][p/s/l][q]"
+    };
+    frame.render_widget(
+        Paragraph::new(help_text)
+            .block(
+                Block::default()
+                    .title("Controls")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
+            .alignment(Alignment::Center),
+        main_layout[2],
+    );
+}
 
-    let left_para = Paragraph::new(left_help_text).alignment(Alignment::Left);
-    let right_para = Paragraph::new(right_help_text).alignment(Alignment::Right);
+/// Renders the Task List view.
+fn draw_task_list(frame: &mut Frame, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Length(3), // Title
+                Constraint::Min(0),    // Main content
+                Constraint::Length(3), // Input or padding
+                Constraint::Length(4), // Help
+            ]
+            .as_ref(),
+        )
+        .split(frame.size());
 
-    frame.render_widget(left_para, help_layout[0]);
-    frame.render_widget(right_para, help_layout[1]);
+    frame.render_widget(
+        Block::default()
+            .title(Title::from(" Task List ").alignment(Alignment::Center)),
+        chunks[0],
+    );
+
+    let mut list_state = ListState::default();
+    list_state.select(app.active_task_index);
+
+    let list_items: Vec<ListItem> = app
+        .tasks
+        .iter()
+        .enumerate()
+        .map(|(i, task)| {
+            let completed_marker = if task.completed { "[x]" } else { "[ ]" };
+            let running_marker =
+                if Some(i) == app.active_task_index && app.state == TimerState::Running {
+                    "▶ "
+                } else {
+                    "  "
+                };
+            let content = format!("{} {}{}", completed_marker, running_marker, task.name);
+
+            let style = if task.completed {
+                Style::default().fg(Color::Green).add_modifier(Modifier::CROSSED_OUT)
+            } else if Some(i) == app.active_task_index && app.state == TimerState::Running {
+                Style::default().fg(Color::LightRed)
+            } else {
+                Style::default()
+            };
+            ListItem::new(Line::from(content)).style(style)
+        })
+        .collect();
+
+    let list = List::new(list_items)
+        .block(Block::default().borders(Borders::ALL).title("Tasks"))
+        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .highlight_symbol(">> ");
+    frame.render_stateful_widget(list, chunks[1], &mut list_state);
+
+    let input = Paragraph::new(app.current_input.as_str())
+        .style(match app.input_mode {
+            InputMode::Normal => Style::default(),
+            InputMode::Editing => Style::default().fg(Color::Yellow),
+        })
+        .block(Block::default().borders(Borders::ALL).title("New Task"));
+    frame.render_widget(input, chunks[2]);
+    if let InputMode::Editing = app.input_mode {
+        frame.set_cursor(
+            chunks[2].x + app.current_input.len() as u16 + 1,
+            chunks[2].y + 1,
+        );
+    }
+
+    let help_text = match app.input_mode {
+        InputMode::Normal => {
+            if chunks[3].width > 80 {
+                " [Tab] Timer | [↑/↓] Navigate | [n] New Task | [Enter] Complete Task | [q] Quit "
+            } else {
+                " [Tab] [↑/↓] [n] [Ent] [q] "
+            }
+        }
+        InputMode::Editing => " [Enter] Submit | [Esc] Cancel ",
+    };
+    frame.render_widget(
+        Paragraph::new(help_text)
+            .block(
+                Block::default()
+                    .title("Controls")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
+            .alignment(Alignment::Center),
+        chunks[3],
+    );
 }

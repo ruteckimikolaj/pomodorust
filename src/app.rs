@@ -60,7 +60,12 @@ pub enum TimerState {
 pub enum View {
     Timer,
     TaskList,
-    // We can add more views like statistics later
+}
+
+/// Represents the different input modes.
+pub enum InputMode {
+    Normal,
+    Editing,
 }
 
 /// The main application state.
@@ -73,8 +78,7 @@ pub struct App {
     pub current_view: View,
     pub tasks: Vec<Task>,
     pub active_task_index: Option<usize>,
-    // This will be used for inputting new task names in a future iteration
-    pub input_mode: bool, 
+    pub input_mode: InputMode,
     pub current_input: String,
 }
 
@@ -87,19 +91,19 @@ impl App {
             time_remaining: Mode::Pomodoro.duration(),
             pomodoros_completed_total: 0,
             should_quit: false,
-            current_view: View::Timer,
+            current_view: View::TaskList, // Start in task list view
             tasks: vec![],
             active_task_index: None,
-            input_mode: false,
+            input_mode: InputMode::Normal,
             current_input: String::new(),
         }
     }
-    
+
     /// Toggles the timer between running and paused states.
     pub fn toggle_timer(&mut self) {
         // Timer can only run if a task is active
         if self.active_task_index.is_some() {
-             match self.state {
+            match self.state {
                 TimerState::Paused => self.state = TimerState::Running,
                 TimerState::Running => self.state = TimerState::Paused,
             }
@@ -141,9 +145,13 @@ impl App {
         self.reset_timer();
     }
 
-    /// Adds a new task to the list.
-    pub fn add_task(&mut self, name: String) {
-        self.tasks.push(Task::new(name));
+    /// Adds a new task to the list from the current input.
+    pub fn submit_task(&mut self) {
+        if !self.current_input.is_empty() {
+            self.tasks.push(Task::new(self.current_input.clone()));
+            self.current_input.clear();
+        }
+        self.input_mode = InputMode::Normal;
     }
 
     /// Toggles the completion status of the active task.
@@ -166,7 +174,11 @@ impl App {
         }
         let i = match self.active_task_index {
             Some(i) => {
-                if i >= self.tasks.len() - 1 { 0 } else { i + 1 }
+                if i >= self.tasks.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
             }
             None => 0,
         };
@@ -180,7 +192,11 @@ impl App {
         }
         let i = match self.active_task_index {
             Some(i) => {
-                if i == 0 { self.tasks.len() - 1 } else { i - 1 }
+                if i == 0 {
+                    self.tasks.len() - 1
+                } else {
+                    i - 1
+                }
             }
             None => 0,
         };
