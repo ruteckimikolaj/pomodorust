@@ -15,7 +15,7 @@ fn get_data_path() -> Option<PathBuf> {
 }
 
 /// Represents a single task for the Pomodoro timer.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Task {
     pub name: String,
     pub completed: bool,
@@ -36,8 +36,9 @@ impl Task {
 }
 
 /// Represents the different timer modes in the Pomodoro technique.
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum Mode {
+    #[default]
     Pomodoro,
     ShortBreak,
     LongBreak,
@@ -64,8 +65,9 @@ impl Mode {
 }
 
 /// Represents the current state of the timer.
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum TimerState {
+    #[default]
     Paused,
     Running,
 }
@@ -76,6 +78,7 @@ pub enum View {
     Timer,
     #[default]
     TaskList,
+    Statistics,
 }
 
 /// Represents the different input modes.
@@ -102,6 +105,7 @@ pub struct App {
     pub input_mode: InputMode,
     #[serde(skip)]
     pub current_input: String,
+    pub completed_task_list_state: Option<usize>,
 }
 
 impl Default for App {
@@ -117,6 +121,7 @@ impl Default for App {
             active_task_index: None,
             input_mode: InputMode::Normal,
             current_input: String::new(),
+            completed_task_list_state: None,
         }
     }
 }
@@ -132,7 +137,6 @@ impl App {
         if let Some(path) = get_data_path() {
             if let Ok(data) = fs::read_to_string(path) {
                 if let Ok(mut app) = serde_json::from_str::<App>(&data) {
-                    // Reset transient state that shouldn't be persisted
                     app.input_mode = InputMode::Normal;
                     app.current_input = String::new();
                     app.should_quit = false;
@@ -140,7 +144,6 @@ impl App {
                 }
             }
         }
-        // If loading fails, return a new app
         App::new()
     }
 
@@ -284,5 +287,44 @@ impl App {
         };
 
         self.active_task_index = Some(uncompleted_tasks_indices[next_index_in_uncompleted]);
+    }
+
+    // --- Statistics View Methods ---
+
+    /// Moves selection down in the completed tasks list.
+    pub fn next_completed_task(&mut self) {
+        let completed_count = self.tasks.iter().filter(|t| t.completed).count();
+        if completed_count == 0 { return; }
+        let i = self.completed_task_list_state.map_or(0, |i| (i + 1) % completed_count);
+        self.completed_task_list_state = Some(i);
+    }
+
+    /// Moves selection up in the completed tasks list.
+    pub fn previous_completed_task(&mut self) {
+        let completed_count = self.tasks.iter().filter(|t| t.completed).count();
+        if completed_count == 0 { return; }
+        let i = self.completed_task_list_state.map_or(0, |i| {
+            if i == 0 { completed_count - 1 } else { i - 1 }
+        });
+        self.completed_task_list_state = Some(i);
+    }
+
+    /// Deletes the selected completed task.
+    pub fn delete_selected_completed_task(&mut self) {
+        if let Some(selected_index) = self.completed_task_list_state {
+            let completed_indices: Vec<usize> = self
+                .tasks
+                .iter()
+                .enumerate()
+                .filter(|(_, t)| t.completed)
+                .map(|(i, _)| i)
+                .collect();
+
+            if let Some(task_index_to_delete) = completed_indices.get(selected_index) {
+                self.tasks.remove(*task_index_to_delete);
+                // After deletion, reset selection
+                self.completed_task_list_state = None;
+            }
+        }
     }
 }
