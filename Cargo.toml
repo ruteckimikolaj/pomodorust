@@ -1,0 +1,15 @@
+[package]
+name = "pomodorust"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ratatui = { version = "0.27.0", features = ["all-widgets"] }
+crossterm = "0.27.0"
+chrono = "0.4.38"
+rodio = "0.18.1"
+serde = { version = "1.0", features = ["derive"] }
+directories = "5.0"
+serde_json = "1.0"
