@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Represents a single task for the Pomodoro timer.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Task {
     pub name: String,
     pub completed: bool,
@@ -22,7 +23,7 @@ impl Task {
 }
 
 /// Represents the different timer modes in the Pomodoro technique.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Mode {
     Pomodoro,
     ShortBreak,
@@ -50,25 +51,29 @@ impl Mode {
 }
 
 /// Represents the current state of the timer.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TimerState {
     Paused,
     Running,
 }
 
 /// Represents the different views of the application.
+#[derive(Serialize, Deserialize)]
 pub enum View {
     Timer,
     TaskList,
 }
 
 /// Represents the different input modes.
+#[derive(Default)]
 pub enum InputMode {
+    #[default]
     Normal,
     Editing,
 }
 
 /// The main application state.
+#[derive(Serialize, Deserialize)]
 pub struct App {
     pub mode: Mode,
     pub state: TimerState,
@@ -78,7 +83,9 @@ pub struct App {
     pub current_view: View,
     pub tasks: Vec<Task>,
     pub active_task_index: Option<usize>,
+    #[serde(skip)]
     pub input_mode: InputMode,
+    #[serde(skip)]
     pub current_input: String,
 }
 
@@ -101,11 +108,13 @@ impl App {
 
     /// Toggles the timer between running and paused states.
     pub fn toggle_timer(&mut self) {
-        // Timer can only run if a task is active
-        if self.active_task_index.is_some() {
-            match self.state {
-                TimerState::Paused => self.state = TimerState::Running,
-                TimerState::Running => self.state = TimerState::Paused,
+        // Timer can only run if an active task is not completed
+        if let Some(index) = self.active_task_index {
+            if !self.tasks[index].completed {
+                match self.state {
+                    TimerState::Paused => self.state = TimerState::Running,
+                    TimerState::Running => self.state = TimerState::Paused,
+                }
             }
         }
     }
@@ -117,7 +126,8 @@ impl App {
     }
 
     /// Switches to the next appropriate timer mode.
-    pub fn next_mode(&mut self) {
+    pub fn next_mode(&mut self) -> Mode {
+        let previous_mode = self.mode;
         if self.mode == Mode::Pomodoro {
             self.pomodoros_completed_total += 1;
             if let Some(index) = self.active_task_index {
@@ -135,8 +145,13 @@ impl App {
             self.mode = Mode::Pomodoro;
         }
         self.reset_timer();
-        // Automatically start the next session
-        self.state = TimerState::Running;
+        // Automatically start the next session if there's an active, uncompleted task
+        if let Some(index) = self.active_task_index {
+             if !self.tasks[index].completed {
+                self.state = TimerState::Running;
+             }
+        }
+        previous_mode
     }
 
     /// Sets the current mode explicitly.
@@ -150,6 +165,10 @@ impl App {
         if !self.current_input.is_empty() {
             self.tasks.push(Task::new(self.current_input.clone()));
             self.current_input.clear();
+            // If this is the first task, select it
+            if self.tasks.len() == 1 {
+                self.active_task_index = Some(0);
+            }
         }
         self.input_mode = InputMode::Normal;
     }
@@ -159,7 +178,6 @@ impl App {
         if let Some(index) = self.active_task_index {
             if let Some(task) = self.tasks.get_mut(index) {
                 task.completed = !task.completed;
-                // If we are completing the active task, pause the timer
                 if task.completed {
                     self.state = TimerState::Paused;
                 }
@@ -167,39 +185,53 @@ impl App {
         }
     }
 
-    /// Moves the selection in the task list down.
+    /// Moves the selection to the next uncompleted task.
     pub fn next_task(&mut self) {
-        if self.tasks.is_empty() {
+        let uncompleted_tasks_indices: Vec<usize> = self
+            .tasks
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| !t.completed)
+            .map(|(i, _)| i)
+            .collect();
+
+        if uncompleted_tasks_indices.is_empty() {
+            self.active_task_index = None;
             return;
         }
-        let i = match self.active_task_index {
-            Some(i) => {
-                if i >= self.tasks.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.active_task_index = Some(i);
+
+        let current_selection = self.active_task_index.unwrap_or(0);
+        let next_index_in_uncompleted = uncompleted_tasks_indices
+            .iter()
+            .position(|&i| i == current_selection)
+            .map_or(0, |i| (i + 1) % uncompleted_tasks_indices.len());
+        
+        self.active_task_index = Some(uncompleted_tasks_indices[next_index_in_uncompleted]);
     }
 
-    /// Moves the selection in the task list up.
+    /// Moves the selection to the previous uncompleted task.
     pub fn previous_task(&mut self) {
-        if self.tasks.is_empty() {
+        let uncompleted_tasks_indices: Vec<usize> = self
+            .tasks
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| !t.completed)
+            .map(|(i, _)| i)
+            .collect();
+
+        if uncompleted_tasks_indices.is_empty() {
+            self.active_task_index = None;
             return;
         }
-        let i = match self.active_task_index {
-            Some(i) => {
-                if i == 0 {
-                    self.tasks.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
+        
+        let current_selection = self.active_task_index.unwrap_or(0);
+        let current_pos = uncompleted_tasks_indices.iter().position(|&i| i == current_selection).unwrap_or(0);
+        let next_index_in_uncompleted = if current_pos == 0 {
+            uncompleted_tasks_indices.len() - 1
+        } else {
+            current_pos - 1
         };
-        self.active_task_index = Some(i);
+
+        self.active_task_index = Some(uncompleted_tasks_indices[next_index_in_uncompleted]);
     }
 }

@@ -13,6 +13,7 @@ use ratatui::{
     prelude::*,
     widgets::{block::*, *},
 };
+use rodio::{source::SineWave, OutputStream, Sink, Source};
 
 mod app;
 use app::{App, InputMode, Mode, TimerState, View};
@@ -46,6 +47,8 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> io::Result<()> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
+    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let sink = Sink::try_new(&stream_handle).unwrap();
 
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
@@ -80,7 +83,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
                     }
                 } else {
                     app.time_remaining = Duration::from_secs(0);
-                    app.next_mode();
+                    let finished_mode = app.next_mode();
+                    play_sound(&sink, finished_mode);
                 }
             }
             last_tick = Instant::now();
@@ -90,6 +94,22 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
             return Ok(());
         }
     }
+}
+
+/// Plays a sound notification based on the mode that just finished.
+fn play_sound(sink: &Sink, finished_mode: Mode) {
+    let (freq1, freq2, duration) = match finished_mode {
+        Mode::Pomodoro => (440.0, 660.0, 150), // A4 to E5 for work end
+        _ => (660.0, 440.0, 150),             // E5 to A4 for break end
+    };
+    let source1 = SineWave::new(freq1)
+        .take_duration(Duration::from_millis(duration))
+        .amplify(0.20);
+    let source2 = SineWave::new(freq2)
+        .take_duration(Duration::from_millis(duration))
+        .amplify(0.20);
+    sink.append(source1);
+    sink.append(source2);
 }
 
 /// Handles key events for the Timer view in Normal mode.
@@ -163,7 +183,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
 
     frame.render_widget(
         Block::default()
-            .title(Title::from(" pomodorust ").alignment(Alignment::Center))
+            .title(Title::from(" 🦀 Pomodorust 🦀 ").alignment(Alignment::Center))
             .style(base_style),
         main_layout[0],
     );
@@ -240,18 +260,16 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     );
 
     frame.render_widget(
-        Paragraph::new(format!("🍅 {}", app.pomodoros_completed_total))
+        Paragraph::new(format!("Total Sessions: {}", app.pomodoros_completed_total))
             .style(accent_style)
             .alignment(Alignment::Center),
         timer_layout[4],
     );
 
     let help_text = if main_layout[2].width > 80 {
-        " [Tab] Tasks   [Space] Start/Pause   [r] Reset\n[p] Pomodoro   [s] Short Break   [l] Long Break   [q] Quit "
-    } else if main_layout[2].width > 40 {
-        " [Tab] Tasks   [Space] Start/Pause\n[r] Reset   [p/s/l] Mode   [q] Quit "
+        " [Tab] Tasks | [Space] Start/Pause | [r] Reset | [p/s/l] Change Mode | [q] Quit "
     } else {
-        "[Tab][Spc][r][p/s/l][q]"
+        " [Tab] [Spc] [r] [p/s/l] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)
@@ -282,44 +300,55 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
         .split(frame.size());
 
     frame.render_widget(
-        Block::default()
-            .title(Title::from(" Task List ").alignment(Alignment::Center)),
+        Block::default().title(Title::from("Pomodorust - Tasks").alignment(Alignment::Center)),
         chunks[0],
     );
 
+    // Separate tasks into active and completed
+    let (active_tasks, completed_tasks): (Vec<_>, Vec<_>) =
+        app.tasks.iter().enumerate().partition(|(_, t)| !t.completed);
+
+    let task_area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(chunks[1]);
+
+    // Create list for active tasks
+    let mut active_list_items = vec![];
+    for (i, task) in &active_tasks {
+        let running_marker = if Some(*i) == app.active_task_index && app.state == TimerState::Running { "▶ " } else { "  " };
+        let content = format!("[ ] {}{}", running_marker, task.name);
+        let style = if Some(*i) == app.active_task_index && app.state == TimerState::Running { Style::default().fg(Color::LightRed) } else { Style::default() };
+        active_list_items.push(ListItem::new(Line::from(content)).style(style));
+    }
+
     let mut list_state = ListState::default();
-    list_state.select(app.active_task_index);
+    if let Some(active_index) = app.active_task_index {
+        if let Some(pos) = active_tasks.iter().position(|(i, _)| *i == active_index) {
+            list_state.select(Some(pos));
+        }
+    }
 
-    let list_items: Vec<ListItem> = app
-        .tasks
-        .iter()
-        .enumerate()
-        .map(|(i, task)| {
-            let completed_marker = if task.completed { "[x]" } else { "[ ]" };
-            let running_marker =
-                if Some(i) == app.active_task_index && app.state == TimerState::Running {
-                    "▶ "
-                } else {
-                    "  "
-                };
-            let content = format!("{} {}{}", completed_marker, running_marker, task.name);
-
-            let style = if task.completed {
-                Style::default().fg(Color::Green).add_modifier(Modifier::CROSSED_OUT)
-            } else if Some(i) == app.active_task_index && app.state == TimerState::Running {
-                Style::default().fg(Color::LightRed)
-            } else {
-                Style::default()
-            };
-            ListItem::new(Line::from(content)).style(style)
-        })
-        .collect();
-
-    let list = List::new(list_items)
-        .block(Block::default().borders(Borders::ALL).title("Tasks"))
+    let active_list = List::new(active_list_items)
+        .block(Block::default().borders(Borders::ALL).title("Active Tasks"))
         .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
         .highlight_symbol(">> ");
-    frame.render_stateful_widget(list, chunks[1], &mut list_state);
+    frame.render_stateful_widget(active_list, task_area[0], &mut list_state);
+
+    // Create list for completed tasks
+    let completed_list_items: Vec<ListItem> = completed_tasks
+        .iter()
+        .map(|(_, task)| {
+            let content = format!("[x] {}", task.name);
+            ListItem::new(Line::from(content))
+                .style(Style::default().fg(Color::Green).add_modifier(Modifier::CROSSED_OUT))
+        })
+        .collect();
+    
+    let completed_list = List::new(completed_list_items)
+        .block(Block::default().borders(Borders::ALL).title("Completed Tasks"));
+    frame.render_widget(completed_list, task_area[1]);
+
 
     let input = Paragraph::new(app.current_input.as_str())
         .style(match app.input_mode {
