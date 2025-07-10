@@ -178,6 +178,39 @@ fn handle_editing_input(key_code: KeyCode, app: &mut App) {
     }
 }
 
+/// Returns a vector of strings representing the ASCII art for a given character.
+fn get_char_art(c: char) -> Vec<&'static str> {
+    match c {
+        '0' => vec!["███", "█ █", "█ █", "█ █", "███"],
+        '1' => vec![" █ ", "██ ", " █ ", " █ ", "███"],
+        '2' => vec!["███", "  █", "███", "█  ", "███"],
+        '3' => vec!["███", "  █", "███", "  █", "███"],
+        '4' => vec!["█ █", "█ █", "███", "  █", "  █"],
+        '5' => vec!["███", "█  ", "███", "  █", "███"],
+        '6' => vec!["███", "█  ", "███", "█ █", "███"],
+        '7' => vec!["███", "  █", "  █", "  █", "  █"],
+        '8' => vec!["███", "█ █", "███", "█ █", "███"],
+        '9' => vec!["███", "█ █", "███", "  █", "███"],
+        ':' => vec!["   ", " █ ", "   ", " █ ", "   "],
+        _ => vec!["   ", "   ", "   ", "   ", "   "],
+    }
+}
+
+/// Creates a Paragraph widget with large text from a string.
+fn create_big_text_paragraph<'a>(text: &str, style: Style) -> Paragraph<'a> {
+    let big_text_height = 5;
+    let mut lines: Vec<Line> = vec![Line::from(""); big_text_height];
+
+    for character in text.chars() {
+        let art = get_char_art(character);
+        for (i, art_line) in art.iter().enumerate() {
+            lines[i].spans.push(Span::styled(*art_line, style));
+            lines[i].spans.push(Span::raw(" ")); // Space between characters
+        }
+    }
+    Paragraph::new(lines).alignment(Alignment::Center)
+}
+
 /// Renders the user interface based on the current view.
 fn ui(frame: &mut Frame, app: &mut App) {
     match app.current_view {
@@ -229,45 +262,64 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     let timer_area = timer_block.inner(main_layout[1]);
     frame.render_widget(timer_block, main_layout[1]);
 
-    let timer_layout = Layout::default()
+    // This layout centers the main timer display vertically
+    let vertical_center_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(15),
-            Constraint::Percentage(45),
-            Constraint::Percentage(15),
-            Constraint::Percentage(15),
-            Constraint::Percentage(10),
+            Constraint::Min(0),    // Top spacer
+            Constraint::Length(5), // Big text height
+            Constraint::Min(1),    // Bottom area for other info
         ])
-        .margin(1)
         .split(timer_area);
 
+    // The timer text itself
+    let time = ChronoDuration::from_std(app.time_remaining).unwrap();
+    let time_text = format!(
+        "{:02}:{:02}",
+        time.num_minutes(),
+        time.num_seconds() % 60
+    );
+    let timer_paragraph = create_big_text_paragraph(&time_text, accent_style);
+    frame.render_widget(timer_paragraph, vertical_center_layout[1]);
+
+    // Layout for the bottom info section
+    let bottom_info_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(50), // Top Spacer
+            Constraint::Length(1),      // Task Name
+            Constraint::Length(1),      // Status
+            Constraint::Length(1),      // Progress Bar
+            Constraint::Length(1),      // Total Sessions
+        ])
+        .horizontal_margin(4) // Indent the smaller info
+        .split(vertical_center_layout[2]);
+
+    // Task Name
     let task_name = app
         .active_task_index
         .and_then(|i| app.tasks.get(i))
         .map_or("No active task", |t| &t.name);
-
     frame.render_widget(
-        Paragraph::new(task_name).style(accent_style).alignment(Alignment::Center),
-        timer_layout[0],
-    );
-
-    let time = ChronoDuration::from_std(app.time_remaining).unwrap();
-    frame.render_widget(
-        Paragraph::new(format!("{:02}:{:02}", time.num_minutes(), time.num_seconds() % 60))
-            .style(accent_style.add_modifier(Modifier::BOLD))
+        Paragraph::new(task_name)
+            .style(accent_style.add_modifier(Modifier::ITALIC))
             .alignment(Alignment::Center),
-        timer_layout[1],
+        bottom_info_layout[1],
     );
 
+    // Status Text
     let (status_text, status_style) = match app.state {
         TimerState::Running => ("▶ Running", running_style),
         TimerState::Paused => ("⏸ Paused", paused_style),
     };
     frame.render_widget(
-        Paragraph::new(status_text).style(status_style).alignment(Alignment::Center),
-        timer_layout[2],
+        Paragraph::new(status_text)
+            .style(status_style)
+            .alignment(Alignment::Center),
+        bottom_info_layout[2],
     );
 
+    // Progress Bar
     let total_duration = app.mode.duration().as_secs_f64();
     let remaining_duration = app.time_remaining.as_secs_f64();
     let progress_ratio = if total_duration > 0.0 {
@@ -275,19 +327,17 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     } else {
         1.0
     };
-    frame.render_widget(
-        Gauge::default()
-            .gauge_style(accent_style)
-            .ratio(progress_ratio)
-            .label(format!("{:.0}%", progress_ratio * 100.0)),
-        timer_layout[3],
-    );
+    let progress_bar = Gauge::default()
+        .gauge_style(accent_style)
+        .ratio(progress_ratio);
+    frame.render_widget(progress_bar, bottom_info_layout[3]);
 
+    // Pomodoros Completed
     frame.render_widget(
         Paragraph::new(format!("Total Sessions: {}", app.pomodoros_completed_total))
-            .style(accent_style)
+            .style(Style::default().fg(Color::DarkGray))
             .alignment(Alignment::Center),
-        timer_layout[4],
+        bottom_info_layout[4],
     );
 
     let help_text = if main_layout[2].width > 80 {
