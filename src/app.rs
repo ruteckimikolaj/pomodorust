@@ -1,5 +1,18 @@
+use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 use std::time::Duration;
+
+/// Helper function to get the path for the state file.
+fn get_data_path() -> Option<PathBuf> {
+    if let Some(proj_dirs) = ProjectDirs::from("com", "pomodorust", "Pomodorust") {
+        let mut path = proj_dirs.config_dir().to_path_buf();
+        path.push("state.json");
+        return Some(path);
+    }
+    None
+}
 
 /// Represents a single task for the Pomodoro timer.
 #[derive(Clone, Serialize, Deserialize)]
@@ -58,9 +71,10 @@ pub enum TimerState {
 }
 
 /// Represents the different views of the application.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub enum View {
     Timer,
+    #[default]
     TaskList,
 }
 
@@ -74,6 +88,7 @@ pub enum InputMode {
 
 /// The main application state.
 #[derive(Serialize, Deserialize)]
+#[serde(default)]
 pub struct App {
     pub mode: Mode,
     pub state: TimerState,
@@ -89,26 +104,61 @@ pub struct App {
     pub current_input: String,
 }
 
-impl App {
-    /// Creates a new App instance.
-    pub fn new() -> Self {
+impl Default for App {
+    fn default() -> Self {
         Self {
             mode: Mode::Pomodoro,
             state: TimerState::Paused,
             time_remaining: Mode::Pomodoro.duration(),
             pomodoros_completed_total: 0,
             should_quit: false,
-            current_view: View::TaskList, // Start in task list view
+            current_view: View::TaskList,
             tasks: vec![],
             active_task_index: None,
             input_mode: InputMode::Normal,
             current_input: String::new(),
         }
     }
+}
+
+impl App {
+    /// Creates a new App instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Loads an App instance from a file, or creates a new one.
+    pub fn load_or_new() -> Self {
+        if let Some(path) = get_data_path() {
+            if let Ok(data) = fs::read_to_string(path) {
+                if let Ok(mut app) = serde_json::from_str::<App>(&data) {
+                    // Reset transient state that shouldn't be persisted
+                    app.input_mode = InputMode::Normal;
+                    app.current_input = String::new();
+                    app.should_quit = false;
+                    return app;
+                }
+            }
+        }
+        // If loading fails, return a new app
+        App::new()
+    }
+
+    /// Saves the current state of the app to a file.
+    pub fn save(&self) {
+        if let Some(path) = get_data_path() {
+            if let Some(parent) = path.parent() {
+                if fs::create_dir_all(parent).is_ok() {
+                    if let Ok(json) = serde_json::to_string_pretty(self) {
+                        let _ = fs::write(path, json);
+                    }
+                }
+            }
+        }
+    }
 
     /// Toggles the timer between running and paused states.
     pub fn toggle_timer(&mut self) {
-        // Timer can only run if an active task is not completed
         if let Some(index) = self.active_task_index {
             if !self.tasks[index].completed {
                 match self.state {
@@ -145,11 +195,10 @@ impl App {
             self.mode = Mode::Pomodoro;
         }
         self.reset_timer();
-        // Automatically start the next session if there's an active, uncompleted task
         if let Some(index) = self.active_task_index {
-             if !self.tasks[index].completed {
+            if !self.tasks[index].completed {
                 self.state = TimerState::Running;
-             }
+            }
         }
         previous_mode
     }
@@ -165,7 +214,6 @@ impl App {
         if !self.current_input.is_empty() {
             self.tasks.push(Task::new(self.current_input.clone()));
             self.current_input.clear();
-            // If this is the first task, select it
             if self.tasks.len() == 1 {
                 self.active_task_index = Some(0);
             }
@@ -205,7 +253,7 @@ impl App {
             .iter()
             .position(|&i| i == current_selection)
             .map_or(0, |i| (i + 1) % uncompleted_tasks_indices.len());
-        
+
         self.active_task_index = Some(uncompleted_tasks_indices[next_index_in_uncompleted]);
     }
 
@@ -223,9 +271,12 @@ impl App {
             self.active_task_index = None;
             return;
         }
-        
+
         let current_selection = self.active_task_index.unwrap_or(0);
-        let current_pos = uncompleted_tasks_indices.iter().position(|&i| i == current_selection).unwrap_or(0);
+        let current_pos = uncompleted_tasks_indices
+            .iter()
+            .position(|&i| i == current_selection)
+            .unwrap_or(0);
         let next_index_in_uncompleted = if current_pos == 0 {
             uncompleted_tasks_indices.len() - 1
         } else {

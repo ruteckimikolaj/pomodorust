@@ -21,8 +21,9 @@ use app::{App, InputMode, Mode, TimerState, View};
 /// Main function to run the application.
 fn main() -> io::Result<()> {
     let mut terminal = setup_terminal()?;
-    let app = App::new();
-    run_app(&mut terminal, app)?;
+    // Load app state from file or create a new one
+    let mut app = App::load_or_new();
+    run_app(&mut terminal, &mut app)?;
     restore_terminal(&mut terminal)?;
     Ok(())
 }
@@ -44,14 +45,17 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 }
 
 /// The main application loop.
-fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> io::Result<()> {
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut App,
+) -> io::Result<()> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
     let sink = Sink::try_new(&stream_handle).unwrap();
 
     loop {
-        terminal.draw(|f| ui(f, &mut app))?;
+        terminal.draw(|f| ui(f, app))?;
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
@@ -62,10 +66,10 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
                 if key.kind == KeyEventKind::Press {
                     match app.input_mode {
                         InputMode::Normal => match app.current_view {
-                            View::Timer => handle_timer_input(key.code, &mut app),
-                            View::TaskList => handle_tasklist_input(key.code, &mut app),
+                            View::Timer => handle_timer_input(key.code, app),
+                            View::TaskList => handle_tasklist_input(key.code, app),
                         },
-                        InputMode::Editing => handle_editing_input(key.code, &mut app),
+                        InputMode::Editing => handle_editing_input(key.code, app),
                     }
                 }
             }
@@ -91,6 +95,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
         }
 
         if app.should_quit {
+            // Save state before quitting
+            app.save();
             return Ok(());
         }
     }
