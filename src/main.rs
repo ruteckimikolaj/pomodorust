@@ -5,6 +5,7 @@ use std::{
 };
 
 use chrono::Duration as ChronoDuration;
+use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     execute,
@@ -22,6 +23,23 @@ mod settings;
 use app::{App, InputMode, Mode, TimerState, View};
 use settings::draw_settings;
 
+/// A simple Pomodoro timer for your terminal.
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Pomodoro duration in minutes.
+    #[arg(short = 'p', long)]
+    pomodoro_duration: Option<u64>,
+
+    /// Short break duration in minutes.
+    #[arg(short = 's', long)]
+    short_break_duration: Option<u64>,
+
+    /// Long break duration in minutes.
+    #[arg(short = 'l', long)]
+    long_break_duration: Option<u64>,
+}
+
 /// Main function to run the application.
 fn main() -> io::Result<()> {
     // This panic hook ensures the terminal is restored even if a Rust-level panic occurs.
@@ -32,9 +50,29 @@ fn main() -> io::Result<()> {
         disable_raw_mode().unwrap();
         original_hook(panic_info);
     }));
+    
+    // Parse command-line arguments.
+    let cli = Cli::parse();
 
     let mut terminal = setup_terminal()?;
     let mut app = App::load_or_new();
+
+    // Override settings from CLI arguments if provided.
+    if let Some(duration) = cli.pomodoro_duration {
+        app.settings.pomodoro_duration = Duration::from_secs(duration * 60);
+    }
+    if let Some(duration) = cli.short_break_duration {
+        app.settings.short_break_duration = Duration::from_secs(duration * 60);
+    }
+    if let Some(duration) = cli.long_break_duration {
+        app.settings.long_break_duration = Duration::from_secs(duration * 60);
+    }
+    
+    // Ensure the timer reflects the potentially updated settings upon startup.
+    if app.state == TimerState::Paused {
+       app.time_remaining = app.mode.duration(&app.settings);
+    }
+
     run_app(&mut terminal, &mut app)?;
     restore_terminal(&mut terminal)?;
     Ok(())
@@ -122,7 +160,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App) {
         return;
     }
 
-    // --- FIX: Prioritize Editing mode to capture all key presses for text input ---
+    // Prioritize Editing mode to capture all key presses for text input.
     match app.input_mode {
         InputMode::Editing => {
             handle_editing_input(key.code, app);
