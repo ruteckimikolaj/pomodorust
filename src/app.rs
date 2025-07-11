@@ -109,8 +109,6 @@ pub struct App {
     pub state: TimerState,
     pub time_remaining: Duration,
     pub pomodoros_completed_total: u32,
-    // --- FIX: Add serde(skip) to prevent saving/loading the quit state ---
-    // This flag is for session control only and should not be persisted.
     #[serde(skip)]
     pub should_quit: bool,
     pub current_view: View,
@@ -327,6 +325,26 @@ impl App {
         };
 
         self.active_task_index = Some(uncompleted_tasks_indices[next_index_in_uncompleted]);
+    }
+
+    /// Moves the currently active task up in the list.
+    pub fn move_active_task_up(&mut self) {
+        if let Some(index) = self.active_task_index {
+            if index > 0 {
+                self.tasks.swap(index, index - 1);
+                self.active_task_index = Some(index - 1);
+            }
+        }
+    }
+
+    /// Moves the currently active task down in the list.
+    pub fn move_active_task_down(&mut self) {
+        if let Some(index) = self.active_task_index {
+            if index < self.tasks.len() - 1 {
+                self.tasks.swap(index, index + 1);
+                self.active_task_index = Some(index + 1);
+            }
+        }
     }
 
     // --- Statistics View Methods ---

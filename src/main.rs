@@ -7,7 +7,7 @@ use std::{
 use chrono::Duration as ChronoDuration;
 use clap::Parser;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -163,20 +163,20 @@ fn handle_key_event(key: KeyEvent, app: &mut App) {
     // Prioritize Editing mode to capture all key presses for text input.
     match app.input_mode {
         InputMode::Editing => {
-            handle_editing_input(key.code, app);
+            handle_editing_input(key, app);
         }
         InputMode::Normal => {
             // Global keybindings are only processed in Normal mode.
-            if let KeyCode::Char('o') = key.code {
+            if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
                 app.current_view = View::Settings;
                 return;
             }
 
             match app.current_view {
-                View::Timer => handle_timer_input(key.code, app),
-                View::TaskList => handle_tasklist_input(key.code, app),
-                View::Statistics => handle_stats_input(key.code, app),
-                View::Settings => handle_settings_input(key.code, app),
+                View::Timer => handle_timer_input(key, app),
+                View::TaskList => handle_tasklist_input(key, app),
+                View::Statistics => handle_stats_input(key, app),
+                View::Settings => handle_settings_input(key, app),
             }
         }
     }
@@ -210,8 +210,8 @@ fn show_desktop_notification(finished_mode: Mode, next_mode: Mode) {
 }
 
 /// Handles key events for the Timer view in Normal mode.
-fn handle_timer_input(key_code: KeyCode, app: &mut App) {
-    match key_code {
+fn handle_timer_input(key: KeyEvent, app: &mut App) {
+    match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char(' ') => app.toggle_timer(),
         KeyCode::Char('r') => app.reset_timer(),
@@ -224,27 +224,52 @@ fn handle_timer_input(key_code: KeyCode, app: &mut App) {
 }
 
 /// Handles key events for the TaskList view in Normal mode.
-fn handle_tasklist_input(key_code: KeyCode, app: &mut App) {
-    match key_code {
-        KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Tab => app.current_view = View::Statistics,
-        KeyCode::Char('n') => app.input_mode = InputMode::Editing,
-        KeyCode::Down | KeyCode::Char('j') => app.next_task(),
-        KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
-        KeyCode::Enter => app.complete_active_task(),
-        KeyCode::Char(' ') => {
-            if app.active_task_index.is_some() {
-                app.state = TimerState::Running;
-                app.current_view = View::Timer;
-            }
+fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
+    match key {
+        // Handle task reordering with Shift modifier
+        KeyEvent {
+            code: KeyCode::Up,
+            modifiers: KeyModifiers::SHIFT,
+            ..
         }
-        _ => {}
+        | KeyEvent {
+            code: KeyCode::Char('K'),
+            modifiers: KeyModifiers::SHIFT,
+            ..
+        } => app.move_active_task_up(),
+        KeyEvent {
+            code: KeyCode::Down,
+            modifiers: KeyModifiers::SHIFT,
+            ..
+        }
+        | KeyEvent {
+            code: KeyCode::Char('J'),
+            modifiers: KeyModifiers::SHIFT,
+            ..
+        } => app.move_active_task_down(),
+
+        // Handle other keys without modifiers
+        KeyEvent { code, .. } => match code {
+            KeyCode::Char('q') => app.should_quit = true,
+            KeyCode::Tab => app.current_view = View::Statistics,
+            KeyCode::Char('n') => app.input_mode = InputMode::Editing,
+            KeyCode::Down | KeyCode::Char('j') => app.next_task(),
+            KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
+            KeyCode::Enter => app.complete_active_task(),
+            KeyCode::Char(' ') => {
+                if app.active_task_index.is_some() {
+                    app.state = TimerState::Running;
+                    app.current_view = View::Timer;
+                }
+            }
+            _ => {}
+        },
     }
 }
 
 /// Handles key events for the Statistics view in Normal mode.
-fn handle_stats_input(key_code: KeyCode, app: &mut App) {
-    match key_code {
+fn handle_stats_input(key: KeyEvent, app: &mut App) {
+    match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Tab => app.current_view = View::Timer,
         KeyCode::Down | KeyCode::Char('j') => app.next_completed_task(),
@@ -255,8 +280,8 @@ fn handle_stats_input(key_code: KeyCode, app: &mut App) {
 }
 
 /// Handles key events for the Settings view in Normal mode.
-fn handle_settings_input(key_code: KeyCode, app: &mut App) {
-    match key_code {
+fn handle_settings_input(key: KeyEvent, app: &mut App) {
+    match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Tab => app.current_view = View::Timer,
         KeyCode::Up | KeyCode::Char('k') => app.previous_setting(),
@@ -268,8 +293,8 @@ fn handle_settings_input(key_code: KeyCode, app: &mut App) {
 }
 
 /// Handles key events when in Editing mode for task input.
-fn handle_editing_input(key_code: KeyCode, app: &mut App) {
-    match key_code {
+fn handle_editing_input(key: KeyEvent, app: &mut App) {
+    match key.code {
         KeyCode::Enter => app.submit_task(),
         KeyCode::Char(c) => app.current_input.push(c),
         KeyCode::Backspace => {
@@ -528,9 +553,9 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
     let help_text = match app.input_mode {
         InputMode::Normal => {
             if chunks[3].width > 80 {
-                " [Tab] Stats | [Space] Start | [↑/↓] Navigate | [n] New | [Enter] Complete | [q] Quit "
+                " [Tab] Stats | [↑/↓] Nav | [Shift+↑/↓] Move | [n] New | [Enter] Complete | [q] Quit "
             } else {
-                " [Tab] [Spc] [↑/↓] [n] [Ent] [q] "
+                " [Tab] [↑/↓] [S+↑/↓] [n] [Ent] [q] "
             }
         }
         InputMode::Editing => " [Enter] Submit | [Esc] Cancel ",
