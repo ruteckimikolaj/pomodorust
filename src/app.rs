@@ -1,3 +1,4 @@
+use crate::settings::{ColorTheme, Settings};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -7,8 +8,18 @@ use std::time::Duration;
 /// Helper function to get the path for the state file.
 fn get_data_path() -> Option<PathBuf> {
     if let Some(proj_dirs) = ProjectDirs::from("com", "pomodorust", "Pomodorust") {
-        let mut path = proj_dirs.config_dir().to_path_buf();
+        let mut path = proj_dirs.data_dir().to_path_buf();
         path.push("state.json");
+        return Some(path);
+    }
+    None
+}
+
+/// Helper function to get the path for the config file.
+fn get_config_path() -> Option<PathBuf> {
+    if let Some(proj_dirs) = ProjectDirs::from("com", "pomodorust", "Pomodorust") {
+        let mut path = proj_dirs.config_dir().to_path_buf();
+        path.push("config.json");
         return Some(path);
     }
     None
@@ -45,12 +56,12 @@ pub enum Mode {
 }
 
 impl Mode {
-    /// Returns the duration of the timer mode.
-    pub fn duration(&self) -> Duration {
+    /// Returns the duration of the timer mode based on settings.
+    pub fn duration(&self, settings: &Settings) -> Duration {
         match self {
-            Mode::Pomodoro => Duration::from_secs(25 * 60),
-            Mode::ShortBreak => Duration::from_secs(5 * 60),
-            Mode::LongBreak => Duration::from_secs(15 * 60),
+            Mode::Pomodoro => settings.pomodoro_duration,
+            Mode::ShortBreak => settings.short_break_duration,
+            Mode::LongBreak => settings.long_break_duration,
         }
     }
 
@@ -79,6 +90,7 @@ pub enum View {
     #[default]
     TaskList,
     Statistics,
+    Settings,
 }
 
 /// Represents the different input modes.
@@ -97,6 +109,9 @@ pub struct App {
     pub state: TimerState,
     pub time_remaining: Duration,
     pub pomodoros_completed_total: u32,
+    // --- FIX: Add serde(skip) to prevent saving/loading the quit state ---
+    // This flag is for session control only and should not be persisted.
+    #[serde(skip)]
     pub should_quit: bool,
     pub current_view: View,
     pub tasks: Vec<Task>,
@@ -106,14 +121,17 @@ pub struct App {
     #[serde(skip)]
     pub current_input: String,
     pub completed_task_list_state: Option<usize>,
+    pub settings: Settings,
+    pub settings_selection: usize,
 }
 
 impl Default for App {
     fn default() -> Self {
+        let settings = Settings::default();
         Self {
             mode: Mode::Pomodoro,
             state: TimerState::Paused,
-            time_remaining: Mode::Pomodoro.duration(),
+            time_remaining: settings.pomodoro_duration,
             pomodoros_completed_total: 0,
             should_quit: false,
             current_view: View::TaskList,
@@ -122,6 +140,8 @@ impl Default for App {
             input_mode: InputMode::Normal,
             current_input: String::new(),
             completed_task_list_state: None,
+            settings,
+            settings_selection: 0,
         }
     }
 }
@@ -134,17 +154,27 @@ impl App {
 
     /// Loads an App instance from a file, or creates a new one.
     pub fn load_or_new() -> Self {
-        if let Some(path) = get_data_path() {
-            if let Ok(data) = fs::read_to_string(path) {
-                if let Ok(mut app) = serde_json::from_str::<App>(&data) {
-                    app.input_mode = InputMode::Normal;
-                    app.current_input = String::new();
-                    app.should_quit = false;
-                    return app;
-                }
-            }
-        }
-        App::new()
+        let settings = if let Some(path) = get_config_path() {
+            fs::read_to_string(path)
+                .ok()
+                .and_then(|data| serde_json::from_str::<Settings>(&data).ok())
+                .unwrap_or_default()
+        } else {
+            Settings::default()
+        };
+
+        let mut app: App = if let Some(path) = get_data_path() {
+            fs::read_to_string(path)
+                .ok()
+                .and_then(|data| serde_json::from_str(&data).ok())
+                .unwrap_or_default()
+        } else {
+            App::new()
+        };
+
+        app.settings = settings;
+        app.time_remaining = app.mode.duration(&app.settings);
+        app
     }
 
     /// Saves the current state of the app to a file.
@@ -152,7 +182,16 @@ impl App {
         if let Some(path) = get_data_path() {
             if let Some(parent) = path.parent() {
                 if fs::create_dir_all(parent).is_ok() {
-                    if let Ok(json) = serde_json::to_string_pretty(self) {
+                    if let Ok(json) = serde_json::to_string_pretty(&self) {
+                        let _ = fs::write(path, json);
+                    }
+                }
+            }
+        }
+        if let Some(path) = get_config_path() {
+            if let Some(parent) = path.parent() {
+                if fs::create_dir_all(parent).is_ok() {
+                    if let Ok(json) = serde_json::to_string_pretty(&self.settings) {
                         let _ = fs::write(path, json);
                     }
                 }
@@ -175,7 +214,7 @@ impl App {
     /// Resets the timer to the current mode's full duration.
     pub fn reset_timer(&mut self) {
         self.state = TimerState::Paused;
-        self.time_remaining = self.mode.duration();
+        self.time_remaining = self.mode.duration(&self.settings);
     }
 
     /// Switches to the next appropriate timer mode.
@@ -231,6 +270,7 @@ impl App {
                 task.completed = !task.completed;
                 if task.completed {
                     self.state = TimerState::Paused;
+                    self.reset_timer();
                 }
             }
         }
@@ -291,20 +331,26 @@ impl App {
 
     // --- Statistics View Methods ---
 
-    /// Moves selection down in the completed tasks list.
     pub fn next_completed_task(&mut self) {
         let completed_count = self.tasks.iter().filter(|t| t.completed).count();
-        if completed_count == 0 { return; }
+        if completed_count == 0 {
+            return;
+        }
         let i = self.completed_task_list_state.map_or(0, |i| (i + 1) % completed_count);
         self.completed_task_list_state = Some(i);
     }
 
-    /// Moves selection up in the completed tasks list.
     pub fn previous_completed_task(&mut self) {
         let completed_count = self.tasks.iter().filter(|t| t.completed).count();
-        if completed_count == 0 { return; }
+        if completed_count == 0 {
+            return;
+        }
         let i = self.completed_task_list_state.map_or(0, |i| {
-            if i == 0 { completed_count - 1 } else { i - 1 }
+            if i == 0 {
+                completed_count - 1
+            } else {
+                i - 1
+            }
         });
         self.completed_task_list_state = Some(i);
     }
@@ -320,11 +366,69 @@ impl App {
                 .map(|(i, _)| i)
                 .collect();
 
-            if let Some(task_index_to_delete) = completed_indices.get(selected_index) {
-                self.tasks.remove(*task_index_to_delete);
-                // After deletion, reset selection
+            if let Some(&task_index_to_delete) = completed_indices.get(selected_index) {
+                self.tasks.remove(task_index_to_delete);
+
+                if let Some(active_idx) = self.active_task_index {
+                    if active_idx > task_index_to_delete {
+                        self.active_task_index = Some(active_idx - 1);
+                    }
+                }
                 self.completed_task_list_state = None;
             }
+        }
+    }
+
+    // --- Settings View Methods ---
+    pub fn next_setting(&mut self) {
+        self.settings_selection = (self.settings_selection + 1) % 5; // 5 settings
+    }
+
+    pub fn previous_setting(&mut self) {
+        if self.settings_selection > 0 {
+            self.settings_selection -= 1;
+        } else {
+            self.settings_selection = 4; // 5 settings, so index is 4
+        }
+    }
+
+    pub fn modify_setting(&mut self, increase: bool) {
+        let delta: i64 = if increase { 1 } else { -1 };
+        match self.settings_selection {
+            0 => {
+                // Pomodoro Duration
+                let current = self.settings.pomodoro_duration.as_secs() / 60;
+                let new = (current as i64 + delta).max(1);
+                self.settings.pomodoro_duration = Duration::from_secs(new as u64 * 60);
+            }
+            1 => {
+                // Short Break
+                let current = self.settings.short_break_duration.as_secs() / 60;
+                let new = (current as i64 + delta).max(1);
+                self.settings.short_break_duration = Duration::from_secs(new as u64 * 60);
+            }
+            2 => {
+                // Long Break
+                let current = self.settings.long_break_duration.as_secs() / 60;
+                let new = (current as i64 + delta).max(1);
+                self.settings.long_break_duration = Duration::from_secs(new as u64 * 60);
+            }
+            3 => {
+                // Theme
+                self.settings.theme = match self.settings.theme {
+                    ColorTheme::Default => ColorTheme::Dracula,
+                    ColorTheme::Dracula => ColorTheme::Solarized,
+                    ColorTheme::Solarized => ColorTheme::Default,
+                };
+            }
+            4 => {
+                // Desktop Notifications
+                self.settings.desktop_notifications = !self.settings.desktop_notifications;
+            }
+            _ => {}
+        }
+        if self.state == TimerState::Paused {
+            self.reset_timer();
         }
     }
 }
