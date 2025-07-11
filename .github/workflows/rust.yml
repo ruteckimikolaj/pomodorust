@@ -10,21 +10,13 @@ env:
   RUST_BACKTRACE: full
   RUST_LOG: info
   RUSTFLAGS: "-C link-arg=-s"
-  CARGO_PROFILE_RELEASE_DEBUG: false
-  CARGO_PROFILE_RELEASE_OPT_LEVEL: "z"
-  CARGO_PROFILE_RELEASE_LTO: true
-  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
-  CARGO_PROFILE_RELEASE_PANIC: "abort"
-  CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS: falses
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        BUILD_TARGET: [release] # refers to a cargo profile
-    outputs:
-      release_built: ${{ steps.set-output.outputs.release_built }}
+        BUILD_TARGET: [release]
     steps:
       - uses: actions/checkout@v4
       - name: Install ALSA development libraries

@@ -15,3 +15,11 @@ directories = "6.0.0"
 serde_json = "1.0.140"
 notify-rust = "4.11.7"
 clap = { version = "4.5.4", features = ["derive"] }
+
+[profile.release]
+debug = false
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
