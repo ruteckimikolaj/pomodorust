@@ -109,6 +109,9 @@ pub struct App {
     pub state: TimerState,
     pub time_remaining: Duration,
     pub pomodoros_completed_total: u32,
+    // --- FIX: Add serde(skip) to prevent saving/loading the quit state ---
+    // This flag is for session control only and should not be persisted.
+    #[serde(skip)]
     pub should_quit: bool,
     pub current_view: View,
     pub tasks: Vec<Task>,
@@ -352,6 +355,7 @@ impl App {
         self.completed_task_list_state = Some(i);
     }
 
+    /// Deletes the selected completed task.
     pub fn delete_selected_completed_task(&mut self) {
         if let Some(selected_index) = self.completed_task_list_state {
             let completed_indices: Vec<usize> = self
@@ -362,8 +366,14 @@ impl App {
                 .map(|(i, _)| i)
                 .collect();
 
-            if let Some(task_index_to_delete) = completed_indices.get(selected_index) {
-                self.tasks.remove(*task_index_to_delete);
+            if let Some(&task_index_to_delete) = completed_indices.get(selected_index) {
+                self.tasks.remove(task_index_to_delete);
+
+                if let Some(active_idx) = self.active_task_index {
+                    if active_idx > task_index_to_delete {
+                        self.active_task_index = Some(active_idx - 1);
+                    }
+                }
                 self.completed_task_list_state = None;
             }
         }
@@ -417,7 +427,6 @@ impl App {
             }
             _ => {}
         }
-        // After changing a duration, update the current timer if it's paused
         if self.state == TimerState::Paused {
             self.reset_timer();
         }

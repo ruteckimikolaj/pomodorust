@@ -40,10 +40,10 @@ pub fn draw_settings(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
-        .split(frame.size());
+        .split(frame.area());
 
     frame.render_widget(
-        Block::default().title(Title::from("⚙️ Settings").alignment(Alignment::Center)),
+        Block::default().title("⚙️ Settings").title_alignment(Alignment::Center),
         chunks[0],
     );
 

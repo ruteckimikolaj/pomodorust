@@ -1,5 +1,6 @@
 use std::{
     io::{self, stdout, Stdout},
+    panic,
     time::{Duration, Instant},
 };
 
@@ -9,6 +10,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use notify_rust::Notification;
 use ratatui::{
     prelude::*,
     widgets::{block::*, *},
@@ -22,6 +24,15 @@ use settings::draw_settings;
 
 /// Main function to run the application.
 fn main() -> io::Result<()> {
+    // This panic hook ensures the terminal is restored even if a Rust-level panic occurs.
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        let mut stdout = stdout();
+        execute!(stdout, LeaveAlternateScreen).unwrap();
+        disable_raw_mode().unwrap();
+        original_hook(panic_info);
+    }));
+
     let mut terminal = setup_terminal()?;
     let mut app = App::load_or_new();
     run_app(&mut terminal, &mut app)?;
@@ -52,8 +63,14 @@ fn run_app(
 ) -> io::Result<()> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-    let sink = Sink::try_new(&stream_handle).unwrap();
+    
+    // Move audio system to the heap to prevent potential stack overflow.
+    let audio_system = OutputStream::try_default().ok().and_then(|(stream, handle)| {
+        Sink::try_new(&handle)
+            .ok()
+            .map(|sink| Box::new((stream, sink))) // Wrap in a Box
+    });
+
 
     loop {
         terminal.draw(|f| ui(f, app))?;
@@ -81,7 +98,12 @@ fn run_app(
                 } else {
                     app.time_remaining = Duration::from_secs(0);
                     let finished_mode = app.next_mode();
-                    play_sound(&sink, finished_mode);
+                    if let Some(audio) = &audio_system {
+                        play_sound(&audio.1, finished_mode);
+                    }
+                    if app.settings.desktop_notifications {
+                        show_desktop_notification(finished_mode, app.mode);
+                    }
                 }
             }
             last_tick = Instant::now();
@@ -100,20 +122,25 @@ fn handle_key_event(key: KeyEvent, app: &mut App) {
         return;
     }
 
-    // Global keybinding to open settings
-    if let KeyCode::Char('o') = key.code {
-        app.current_view = View::Settings;
-        return;
-    }
-
+    // --- FIX: Prioritize Editing mode to capture all key presses for text input ---
     match app.input_mode {
-        InputMode::Normal => match app.current_view {
-            View::Timer => handle_timer_input(key.code, app),
-            View::TaskList => handle_tasklist_input(key.code, app),
-            View::Statistics => handle_stats_input(key.code, app),
-            View::Settings => handle_settings_input(key.code, app),
-        },
-        InputMode::Editing => handle_editing_input(key.code, app),
+        InputMode::Editing => {
+            handle_editing_input(key.code, app);
+        }
+        InputMode::Normal => {
+            // Global keybindings are only processed in Normal mode.
+            if let KeyCode::Char('o') = key.code {
+                app.current_view = View::Settings;
+                return;
+            }
+
+            match app.current_view {
+                View::Timer => handle_timer_input(key.code, app),
+                View::TaskList => handle_tasklist_input(key.code, app),
+                View::Statistics => handle_stats_input(key.code, app),
+                View::Settings => handle_settings_input(key.code, app),
+            }
+        }
     }
 }
 
@@ -131,6 +158,17 @@ fn play_sound(sink: &Sink, finished_mode: Mode) {
         .amplify(0.20);
     sink.append(source1);
     sink.append(source2);
+}
+
+/// Shows a desktop notification.
+fn show_desktop_notification(finished_mode: Mode, next_mode: Mode) {
+    let summary = format!("{} Finished!", finished_mode.title());
+    let body = format!("Time for your {}.", next_mode.title());
+    let _ = Notification::new()
+        .summary(&summary)
+        .body(&body)
+        .icon("dialog-information")
+        .show();
 }
 
 /// Handles key events for the Timer view in Normal mode.
@@ -266,11 +304,12 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
-        .split(frame.size());
+        .split(frame.area());
 
     frame.render_widget(
         Block::default()
-            .title(Title::from(" 🦀 Pomodorust 🦀 ").alignment(Alignment::Center))
+            .title(" 🦀 Pomodorust 🦀 ")
+            .title_alignment(Alignment::Center)
             .style(base_style),
         main_layout[0],
     );
@@ -303,7 +342,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
         .split(timer_area);
 
     // The timer text itself
-    let time = ChronoDuration::from_std(app.time_remaining).unwrap();
+    let time = ChronoDuration::from_std(app.time_remaining).unwrap_or_else(|_| ChronoDuration::zero());
     let time_text = format!(
         "{:02}:{:02}",
         time.num_minutes(),
@@ -316,7 +355,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     let bottom_info_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(50), // Top Spacer
+            Constraint::Percentage(50), // Top spacer
             Constraint::Length(1),      // Task Name
             Constraint::Length(1),      // Status
             Constraint::Length(1),      // Progress Bar
@@ -401,10 +440,10 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
             ]
             .as_ref(),
         )
-        .split(frame.size());
+        .split(frame.area());
 
     frame.render_widget(
-        Block::default().title(Title::from("✅ Tasks").alignment(Alignment::Center)),
+        Block::default().title("✅ Tasks").title_alignment(Alignment::Center),
         chunks[0],
     );
 
@@ -442,10 +481,10 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
         .block(Block::default().borders(Borders::ALL).title("New Task"));
     frame.render_widget(input, chunks[2]);
     if let InputMode::Editing = app.input_mode {
-        frame.set_cursor(
+        frame.set_cursor_position((
             chunks[2].x + app.current_input.len() as u16 + 1,
             chunks[2].y + 1,
-        );
+        ));
     }
 
     let help_text = match app.input_mode {
@@ -481,10 +520,10 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
             Constraint::Min(0),
             Constraint::Length(4),
         ])
-        .split(frame.size());
+        .split(frame.area());
 
     frame.render_widget(
-        Block::default().title(Title::from("📊 Statistics").alignment(Alignment::Center)),
+        Block::default().title("📊 Statistics").title_alignment(Alignment::Center),
         chunks[0],
     );
 
