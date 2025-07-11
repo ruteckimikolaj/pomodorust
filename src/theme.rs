@@ -3,7 +3,6 @@ use ratatui::style::Color;
 
 /// A struct that holds all the colors for a given theme.
 pub struct Theme {
-    pub name: &'static str,
     pub pomodoro_color: Color,
     pub short_break_color: Color,
     pub long_break_color: Color,
@@ -33,7 +32,6 @@ impl Theme {
     /// Dracula theme colors.
     pub fn dracula() -> Self {
         Self {
-            name: "Dracula",
             pomodoro_color: Color::Rgb(255, 85, 85), // Red
             short_break_color: Color::Rgb(80, 250, 123), // Green
             long_break_color: Color::Rgb(189, 147, 249), // Purple
@@ -53,7 +51,6 @@ impl Theme {
     /// Solarized theme colors.
     pub fn solarized() -> Self {
         Self {
-            name: "Solarized",
             pomodoro_color: Color::Rgb(220, 50, 47), // red
             short_break_color: Color::Rgb(133, 153, 0), // green
             long_break_color: Color::Rgb(38, 139, 210), // blue
@@ -73,7 +70,6 @@ impl Theme {
     /// Nord theme colors.
     pub fn nord() -> Self {
         Self {
-            name: "Nord",
             pomodoro_color: Color::Rgb(191, 97, 106), // nord11
             short_break_color: Color::Rgb(163, 190, 140), // nord14
             long_break_color: Color::Rgb(129, 161, 193), // nord10
@@ -94,7 +90,6 @@ impl Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            name: "Default",
             pomodoro_color: Color::LightRed,
             short_break_color: Color::LightGreen,
             long_break_color: Color::LightBlue,

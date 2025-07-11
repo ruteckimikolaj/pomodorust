@@ -401,7 +401,7 @@ fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
 
     frame.render_widget(
         Block::default()
-            .title(" 🦀 Pomodorust 🦀 ")
+            .title(" P O M O D O R U S T ")
             .title_alignment(Alignment::Center)
             .style(base_style),
         main_layout[0],
@@ -538,7 +538,7 @@ fn draw_task_list(frame: &mut Frame, app: &mut App, theme: &Theme) {
 
     frame.render_widget(
         Block::default()
-            .title("✅ Tasks")
+            .title(" ✓ TASKS ")
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
         chunks[0],
@@ -621,7 +621,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
         .split(frame.area());
 
     frame.render_widget(
-        Block::default().title("📊 Statistics").title_alignment(Alignment::Center).style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
+        Block::default().title(" Σ STATISTICS ").title_alignment(Alignment::Center).style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
         chunks[0],
     );
 
@@ -654,7 +654,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
     let list_items: Vec<ListItem> = completed_tasks
         .iter()
         .map(|task| {
-            let pomos = format!("{} 🍅", task.pomodoros);
+            let pomos = format!("{} ●", task.pomodoros);
             let content = format!("{:<40} | {}", task.name, pomos);
             ListItem::new(Line::from(content)).style(Style::default().fg(theme.base_fg))
         })
@@ -693,7 +693,7 @@ fn draw_task_details(frame: &mut Frame, app: &App, theme: &Theme) {
         .split(frame.area());
 
     let title = Block::default()
-        .title("📄 Task Details")
+        .title(" i DETAILS ")
         .title_alignment(Alignment::Center)
         .style(Style::default().fg(theme.base_fg).bg(theme.base_bg));
     frame.render_widget(title, chunks[0]);
@@ -735,12 +735,12 @@ fn draw_task_details(frame: &mut Frame, app: &App, theme: &Theme) {
 
             let rows = vec![
                 Row::new(vec![Cell::from("Task"), Cell::from(task.name.clone())]),
-                Row::new(vec![Cell::from("Status"), Cell::from("✅ Completed")]).style(Style::default().fg(theme.running_fg)),
+                Row::new(vec![Cell::from("Status"), Cell::from("✓ Completed")]).style(Style::default().fg(theme.running_fg)),
                 Row::new(vec![Cell::from("Created"), Cell::from(created.format("%Y-%m-%d %H:%M").to_string())]),
                 Row::new(vec![Cell::from("Completed"), Cell::from(completed_str)]),
                 Row::new(vec![Cell::from("Time to Complete"), Cell::from(time_to_complete_str)]),
                 Row::new(vec![Cell::from("Time Focused"), Cell::from(time_spent_formatted)]),
-                Row::new(vec![Cell::from("Pomodoros"), Cell::from(format!("{} 🍅", task.pomodoros))]),
+                Row::new(vec![Cell::from("Pomodoros"), Cell::from(format!("{} ●", task.pomodoros))]),
             ];
 
             let table = Table::new(rows, [Constraint::Length(20), Constraint::Min(20)])
