@@ -1,38 +1,95 @@
-# 🦀 Pomodorust
 <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-blue">
 <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 
-A beautiful, feature-rich Pomodoro timer application for the terminal, built with <img alt="rust" src="https://img.shields.io/badge/Rust-%23000000.svg?e&logo=rust&logoColor=white">
-.
+# Pomodorust 🍅
 
+A minimalist, terminal-based Pomodoro timer written in Rust to help you stay focused and productive. This project was born out of a desire to learn Rust and create a practical tool for daily use.
 
-# ✨ Features
+## ✨ Features
 
-## 🍅 Pomodoro Timer
-Flexible Work/Break Cycles: Customizable durations for work sessions, short breaks, and long breaks
-Auto-cycling: Automatically transitions between work and break periods
-Visual Feedback: Large, easy-to-read countdown timer with progress bar
-Sound Notifications: Audio alerts when timers complete
-Desktop Notifications: System notifications when a timer finishes (can be toggled)
+- **Classic Pomodoro Workflow**: Cycle through focused work sessions, short breaks, and long breaks.
+- **Task Management**: Create, complete, and archive tasks to track your work.
+- **Task Prioritization**: Reorder your active tasks to focus on what's most important.
+- **Detailed Statistics**: View details for completed tasks, including creation/completion dates and total time spent.
+- **Customizable Timers**: Set custom durations for pomodoro, short break, and long break sessions via command-line arguments.
+- **Color Themes**: Personalize your experience with built-in themes (Default, Dracula, Solarized, Nord).
+- **Desktop Notifications**: Get native desktop notifications when a timer finishes.
+- **Cross-Platform**: Built with Rust, it runs on macOS, Linux, and Windows.
 
-## ✅ Task Management
-Task Tracking: Create and manage tasks to focus on during Pomodoro sessions
-Task Association: Link Pomodoro sessions with specific tasks
-Task Prioritization: Easily reorder tasks to match your priorities
-Task Statistics: Track pomodoros completed and time spent on each task
+## 📦 Installation
 
-## 📊 Statistics
-Session Tracking: Monitor total Pomodoro sessions completed
-Time Analysis: Track total focused time
-Task History: Review completed tasks with detailed statistics
-Task Details: View creation date, completion time, and time spent on each task
+### Using Cargo
 
-## 🎨 Customization
-Theme Selection: Choose between Default, Dracula, and Solarized themes
-Persistent Settings: Your preferences are saved between sessions
-Command-line Options: Set custom timer durations directly from the command line
+If you have the Rust toolchain installed, you can install `pomodorust` directly from crates.io:
 
-## 📋 Requirements
-Rust (2021 edition or later)
-A terminal with TUI support
-Optional: Desktop notification system (for notification features)
+```shell
+cargo install pomodorust
+```
+
+### Using Homebrew (macOS)
+
+*Coming soon! Once the project is published, you will be able to install it with:*
+
+```shell
+brew install pomodorust
+```
+
+## 🚀 Usage
+
+### Command-Line Arguments
+
+You can start the application with custom timer durations (in minutes):
+
+```shell
+pomodorust -p 25 -s 5 -l 15
+```
+
+| **Argument**             | **Alias** | **Description**                 |
+| ------------------------ | --------- | ------------------------------- |
+| `--pomodoro-duration`    | `-p`      | Pomodoro duration in minutes    |
+| `--short-break-duration` | `-s`      | Short break duration in minutes |
+| `--long-break-duration`  | `-l`      | Long break duration in minutes  |
+
+### In-App Controls
+
+The application is controlled entirely with your keyboard. The controls are context-aware and displayed at the bottom of each view.
+
+**Global**
+
+- `o`: Open the settings panel.
+- `q`: Quit the application.
+
+**Task List View**
+
+- `↑`/`k` & `↓`/`j`: Navigate tasks.
+- `Shift` + `↑`/`K` & `Shift` + `↓`/`J`: Move/reorder the selected task.
+- `n`: Create a new task.
+- `Enter`: Mark the selected task as complete/incomplete.
+- `Space`: Start the timer for the selected task.
+- `Tab`: Switch to the Statistics view.
+
+**Statistics View**
+
+- `↑`/`k` & `↓`/`j`: Navigate completed tasks.
+- `Enter`: View details for the selected task.
+- `d` / `Delete`: Delete the selected completed task.
+- `Tab`: Switch to the Timer view.
+
+## ❤️ Contributing
+
+This is my first project in Rust, and I'm passionate about making it better! I welcome all forms of contributions, from feature suggestions and bug reports to code improvements and pull requests.
+
+If you have ideas on how to improve the code, make it more idiomatic, or enhance its performance, please don't hesitate to open an issue or a pull request. Your feedback is incredibly valuable.
+
+1. **Fork the repository.**
+2. **Create a new branch** (`git checkout -b feature/your-feature-name`).
+3. **Make your changes.**
+4. **Commit your changes** (`git commit -m 'Add some amazing feature'`).
+5. **Push to the branch** (`git push origin feature/your-feature-name`).
+6. **Open a Pull Request.**
+
+## 💖 Support the Project
+
+If you find `pomodorust` useful and want to support its development, you can:
+
+<a href="https://www.google.com/search?q=https://www.buymeacoffee.com/your-username" target="_blank"><img src="https://www.google.com/search?q=https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee"></img></a>
