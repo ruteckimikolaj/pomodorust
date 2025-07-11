@@ -20,8 +20,10 @@ use rodio::{source::SineWave, OutputStream, Sink, Source};
 
 mod app;
 mod settings;
+mod theme;
 use app::{App, InputMode, Mode, TimerState, View};
 use settings::draw_settings;
+use theme::Theme;
 
 /// A simple Pomodoro timer for your terminal.
 #[derive(Parser, Debug)]
@@ -336,12 +338,13 @@ fn handle_editing_input(key: KeyEvent, app: &mut App) {
 
 /// Renders the user interface based on the current view.
 fn ui(frame: &mut Frame, app: &mut App) {
+    let theme = Theme::from_settings(app.settings.theme);
     match app.current_view {
-        View::Timer => draw_timer(frame, app),
-        View::TaskList => draw_task_list(frame, app),
-        View::Statistics => draw_statistics(frame, app),
-        View::Settings => draw_settings(frame, app),
-        View::TaskDetails => draw_task_details(frame, app),
+        View::Timer => draw_timer(frame, app, &theme),
+        View::TaskList => draw_task_list(frame, app, &theme),
+        View::Statistics => draw_statistics(frame, app, &theme),
+        View::Settings => draw_settings(frame, app, &theme),
+        View::TaskDetails => draw_task_details(frame, app, &theme),
     }
 }
 
@@ -379,17 +382,17 @@ fn create_big_text_paragraph<'a>(text: &str, style: Style) -> Paragraph<'a> {
 }
 
 /// Renders the Timer view.
-fn draw_timer(frame: &mut Frame, app: &App) {
+fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
     let (accent_color, mode_bg_color) = match app.mode {
-        Mode::Pomodoro => (Color::LightRed, Color::Rgb(50, 20, 20)),
-        Mode::ShortBreak => (Color::LightGreen, Color::Rgb(20, 50, 20)),
-        Mode::LongBreak => (Color::LightBlue, Color::Rgb(20, 20, 50)),
+        Mode::Pomodoro => (theme.pomodoro_color, theme.pomodoro_bg),
+        Mode::ShortBreak => (theme.short_break_color, theme.short_break_bg),
+        Mode::LongBreak => (theme.long_break_color, theme.long_break_bg),
     };
 
-    let base_style = Style::default().bg(Color::Black).fg(Color::Gray);
+    let base_style = Style::default().bg(theme.base_bg).fg(theme.base_fg);
     let accent_style = Style::default().fg(accent_color);
-    let running_style = Style::default().fg(Color::Green);
-    let paused_style = Style::default().fg(Color::Yellow);
+    let running_style = Style::default().fg(theme.running_fg);
+    let paused_style = Style::default().fg(theme.paused_fg);
 
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -407,7 +410,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     let timer_block_border_style = if app.state == TimerState::Running {
         accent_style
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(theme.help_text_fg)
     };
 
     let timer_block = Block::default()
@@ -494,7 +497,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     // Pomodoros Completed
     frame.render_widget(
         Paragraph::new(format!("Total Sessions: {}", app.pomodoros_completed_total))
-            .style(Style::default().fg(Color::DarkGray))
+            .style(Style::default().fg(theme.help_text_fg))
             .alignment(Alignment::Center),
         bottom_info_layout[4],
     );
@@ -510,7 +513,8 @@ fn draw_timer(frame: &mut Frame, app: &App) {
                 Block::default()
                     .title("Controls")
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
             )
             .alignment(Alignment::Center),
         main_layout[2],
@@ -518,7 +522,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
 }
 
 /// Renders the Task List view.
-fn draw_task_list(frame: &mut Frame, app: &mut App) {
+fn draw_task_list(frame: &mut Frame, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -533,7 +537,10 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
         .split(frame.area());
 
     frame.render_widget(
-        Block::default().title("✅ Tasks").title_alignment(Alignment::Center),
+        Block::default()
+            .title("✅ Tasks")
+            .title_alignment(Alignment::Center)
+            .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
         chunks[0],
     );
 
@@ -552,23 +559,23 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
         .map(|(i, task)| {
             let running_marker = if Some(*i) == app.active_task_index && app.state == TimerState::Running { "▶ " } else { "  " };
             let content = format!("[ ] {}{}", running_marker, task.name);
-            let style = if Some(*i) == app.active_task_index && app.state == TimerState::Running { Style::default().fg(Color::LightRed) } else { Style::default() };
+            let style = if Some(*i) == app.active_task_index && app.state == TimerState::Running { Style::default().fg(theme.pomodoro_color) } else { Style::default().fg(theme.base_fg) };
             ListItem::new(Line::from(content)).style(style)
         })
         .collect();
 
     let active_list = List::new(active_list_items)
-        .block(Block::default().borders(Borders::ALL).title("Active Tasks"))
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .block(Block::default().borders(Borders::ALL).title("Active Tasks").style(Style::default().fg(theme.base_fg).bg(theme.base_bg)))
+        .highlight_style(Style::default().bg(theme.highlight_bg).add_modifier(Modifier::BOLD))
         .highlight_symbol(">> ");
     frame.render_stateful_widget(active_list, chunks[1], &mut list_state);
 
     let input = Paragraph::new(app.current_input.as_str())
         .style(match app.input_mode {
-            InputMode::Normal => Style::default(),
-            InputMode::Editing => Style::default().fg(Color::Yellow),
+            InputMode::Normal => Style::default().fg(theme.base_fg),
+            InputMode::Editing => Style::default().fg(theme.paused_fg),
         })
-        .block(Block::default().borders(Borders::ALL).title("New Task"));
+        .block(Block::default().borders(Borders::ALL).title("New Task").style(Style::default().fg(theme.base_fg).bg(theme.base_bg)));
     frame.render_widget(input, chunks[2]);
     if let InputMode::Editing = app.input_mode {
         frame.set_cursor_position((
@@ -593,7 +600,8 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
                 Block::default()
                     .title("Controls")
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
             )
             .alignment(Alignment::Center),
         chunks[3],
@@ -601,7 +609,7 @@ fn draw_task_list(frame: &mut Frame, app: &mut App) {
 }
 
 /// Renders the Statistics view.
-fn draw_statistics(frame: &mut Frame, app: &mut App) {
+fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -613,7 +621,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
         .split(frame.area());
 
     frame.render_widget(
-        Block::default().title("📊 Statistics").title_alignment(Alignment::Center),
+        Block::default().title("📊 Statistics").title_alignment(Alignment::Center).style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
         chunks[0],
     );
 
@@ -629,7 +637,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
     ];
     frame.render_widget(
         Paragraph::new(summary_text)
-            .block(Block::default().borders(Borders::ALL).title("Summary"))
+            .block(Block::default().borders(Borders::ALL).title("Summary").style(Style::default().fg(theme.base_fg).bg(theme.base_bg)))
             .alignment(Alignment::Center),
         chunks[1],
     );
@@ -648,13 +656,13 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
         .map(|task| {
             let pomos = format!("{} 🍅", task.pomodoros);
             let content = format!("{:<40} | {}", task.name, pomos);
-            ListItem::new(Line::from(content))
+            ListItem::new(Line::from(content)).style(Style::default().fg(theme.base_fg))
         })
         .collect();
     
     let list = List::new(list_items)
-        .block(Block::default().borders(Borders::ALL).title("Completed & Archived Tasks"))
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+        .block(Block::default().borders(Borders::ALL).title("Completed & Archived Tasks").style(Style::default().fg(theme.base_fg).bg(theme.base_bg)))
+        .highlight_style(Style::default().bg(theme.highlight_bg).add_modifier(Modifier::BOLD))
         .highlight_symbol(">> ");
     frame.render_stateful_widget(list, chunks[2], &mut list_state);
 
@@ -669,7 +677,8 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
                 Block::default()
                     .title("Controls")
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
             )
             .alignment(Alignment::Center),
         chunks[3],
@@ -677,7 +686,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
 }
 
 /// Renders the Task Details view.
-fn draw_task_details(frame: &mut Frame, app: &App) {
+fn draw_task_details(frame: &mut Frame, app: &App, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
@@ -685,13 +694,15 @@ fn draw_task_details(frame: &mut Frame, app: &App) {
 
     let title = Block::default()
         .title("📄 Task Details")
-        .title_alignment(Alignment::Center);
+        .title_alignment(Alignment::Center)
+        .style(Style::default().fg(theme.base_fg).bg(theme.base_bg));
     frame.render_widget(title, chunks[0]);
 
     let main_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .padding(Padding::uniform(1));
+        .padding(Padding::uniform(1))
+        .style(Style::default().fg(theme.base_fg).bg(theme.base_bg));
     let inner_area = main_block.inner(chunks[1]);
     frame.render_widget(main_block, chunks[1]);
 
@@ -724,7 +735,7 @@ fn draw_task_details(frame: &mut Frame, app: &App) {
 
             let rows = vec![
                 Row::new(vec![Cell::from("Task"), Cell::from(task.name.clone())]),
-                Row::new(vec![Cell::from("Status"), Cell::from("✅ Completed")]).style(Style::default().fg(Color::Green)),
+                Row::new(vec![Cell::from("Status"), Cell::from("✅ Completed")]).style(Style::default().fg(theme.running_fg)),
                 Row::new(vec![Cell::from("Created"), Cell::from(created.format("%Y-%m-%d %H:%M").to_string())]),
                 Row::new(vec![Cell::from("Completed"), Cell::from(completed_str)]),
                 Row::new(vec![Cell::from("Time to Complete"), Cell::from(time_to_complete_str)]),
@@ -734,8 +745,9 @@ fn draw_task_details(frame: &mut Frame, app: &App) {
 
             let table = Table::new(rows, [Constraint::Length(20), Constraint::Min(20)])
                 .header(Row::new(vec!["Metric", "Value"]).style(Style::default().add_modifier(Modifier::BOLD)))
-                .block(Block::default().title("Statistics").borders(Borders::ALL))
-                .column_spacing(2);
+                .block(Block::default().title("Statistics").borders(Borders::ALL).style(Style::default().fg(theme.base_fg)))
+                .column_spacing(2)
+                .style(Style::default().fg(theme.base_fg));
 
             frame.render_widget(table, inner_area);
 
@@ -755,7 +767,8 @@ fn draw_task_details(frame: &mut Frame, app: &App) {
                 Block::default()
                     .title("Controls")
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
             )
             .alignment(Alignment::Center),
         chunks[2],

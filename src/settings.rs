@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::app::App;
+use crate::theme::Theme;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Default)]
 pub enum ColorTheme {
@@ -13,6 +14,7 @@ pub enum ColorTheme {
     Default,
     Dracula,
     Solarized,
+    Nord,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -36,14 +38,17 @@ impl Default for Settings {
     }
 }
 
-pub fn draw_settings(frame: &mut Frame, app: &mut App) {
+pub fn draw_settings(frame: &mut Frame, app: &mut App, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
         .split(frame.area());
 
     frame.render_widget(
-        Block::default().title("⚙️ Settings").title_alignment(Alignment::Center),
+        Block::default()
+            .title("⚙️ Settings")
+            .title_alignment(Alignment::Center)
+            .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
         chunks[0],
     );
 
@@ -73,17 +78,22 @@ pub fn draw_settings(frame: &mut Frame, app: &mut App) {
 
     let items: Vec<ListItem> = settings_list
         .iter()
-        .map(|s| ListItem::new(s.clone()))
+        .map(|s| ListItem::new(s.clone()).style(Style::default().fg(theme.base_fg)))
         .collect();
 
     let mut list_state = ListState::default();
     list_state.select(Some(app.settings_selection));
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Options"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Options")
+                .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
+        )
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(theme.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
@@ -101,7 +111,8 @@ pub fn draw_settings(frame: &mut Frame, app: &mut App) {
                 Block::default()
                     .title("Controls")
                     .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
             )
             .alignment(Alignment::Center),
         chunks[2],
