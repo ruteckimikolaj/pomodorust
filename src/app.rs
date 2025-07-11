@@ -448,7 +448,8 @@ impl App {
                 self.settings.theme = match self.settings.theme {
                     ColorTheme::Default => ColorTheme::Dracula,
                     ColorTheme::Dracula => ColorTheme::Solarized,
-                    ColorTheme::Solarized => ColorTheme::Default,
+                    ColorTheme::Solarized => ColorTheme::Nord,
+                    ColorTheme::Nord => ColorTheme::Default,
                 };
             }
             4 => {

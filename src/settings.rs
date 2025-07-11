@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use crate::app::App;
+use crate::theme::Theme;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Default)]
 pub enum ColorTheme {
@@ -13,6 +14,7 @@ pub enum ColorTheme {
     Default,
     Dracula,
     Solarized,
+    Nord,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -36,74 +38,85 @@ impl Default for Settings {
     }
 }
 
-pub fn draw_settings(frame: &mut Frame, app: &mut App) {
-    let chunks = Layout::default()
+/// A helper function to create a centered rect using up certain percentages of the available rect.
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
-        .split(frame.area());
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
 
-    frame.render_widget(
-        Block::default().title("⚙️ Settings").title_alignment(Alignment::Center),
-        chunks[0],
-    );
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
 
-    let settings_list = vec![
-        format!(
-            "Pomodoro Duration:      < {} mins >",
-            app.settings.pomodoro_duration.as_secs() / 60
-        ),
-        format!(
-            "Short Break Duration:   < {} mins >",
-            app.settings.short_break_duration.as_secs() / 60
-        ),
-        format!(
-            "Long Break Duration:    < {} mins >",
-            app.settings.long_break_duration.as_secs() / 60
-        ),
-        format!("Color Theme:            < {:?} >", app.settings.theme),
-        format!(
-            "Desktop Notifications:  < {} >",
-            if app.settings.desktop_notifications {
-                "On"
-            } else {
-                "Off"
-            }
-        ),
-    ];
+pub fn draw_settings(frame: &mut Frame, app: &mut App, theme: &Theme) {
+    let area = centered_rect(60, 50, frame.area());
 
-    let items: Vec<ListItem> = settings_list
-        .iter()
-        .map(|s| ListItem::new(s.clone()))
-        .collect();
+    let settings_block = Block::default()
+        .title(" ⚙ SETTINGS ")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Double)
+        .style(Style::default().fg(theme.accent_color).bg(theme.base_bg))
+        .title_alignment(Alignment::Center);
+    
+    let inner_area = settings_block.inner(area);
 
-    let mut list_state = ListState::default();
-    list_state.select(Some(app.settings_selection));
+    // Create a layout to include a footer for help text
+    let inner_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .margin(1)
+        .split(inner_area);
 
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Options"))
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
+    let rows = vec![
+        Row::new(vec![
+            Cell::from("Pomodoro Duration"),
+            Cell::from(format!("< {} mins >", app.settings.pomodoro_duration.as_secs() / 60)),
+        ]),
+        Row::new(vec![
+            Cell::from("Short Break"),
+            Cell::from(format!("< {} mins >", app.settings.short_break_duration.as_secs() / 60)),
+        ]),
+        Row::new(vec![
+            Cell::from("Long Break"),
+            Cell::from(format!("< {} mins >", app.settings.long_break_duration.as_secs() / 60)),
+        ]),
+        Row::new(vec![
+            Cell::from("Color Theme"),
+            Cell::from(format!("< {:?} >", app.settings.theme)),
+        ]),
+        Row::new(vec![
+            Cell::from("Desktop Notifications"),
+            Cell::from(format!("< {} >", if app.settings.desktop_notifications { "On" } else { "Off" })),
+        ]),
+    ].into_iter().map(|r| r.height(1).style(Style::default().fg(theme.base_fg))).collect::<Vec<Row>>();
+
+    let mut table_state = TableState::default();
+    table_state.select(Some(app.settings_selection));
+
+    let table = Table::new(rows, [Constraint::Percentage(50), Constraint::Percentage(50)])
+        .row_highlight_style(Style::default().bg(theme.highlight_bg).add_modifier(Modifier::BOLD))
         .highlight_symbol(">> ");
 
-    frame.render_stateful_widget(list, chunks[1], &mut list_state);
+    // Render the popup
+    frame.render_widget(Clear, area); // This clears the area before rendering the popup
+    frame.render_widget(settings_block, area);
+    frame.render_stateful_widget(table, inner_layout[0], &mut table_state);
 
-    let help_text = if chunks[2].width > 80 {
-        " [Tab] Back to Timer | [↑/↓] Navigate | [←/→] Change Value | [q] Quit "
-    } else {
-        " [Tab] [↑/↓] [←/→] [q] "
-    };
-    frame.render_widget(
-        Paragraph::new(help_text)
-            .block(
-                Block::default()
-                    .title("Controls")
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
-            )
-            .alignment(Alignment::Center),
-        chunks[2],
-    );
+    // Render the help text in the footer
+    let help_text = " [↑/↓] Navigate | [←/→] Change | [Tab] Back ";
+    let help_paragraph = Paragraph::new(help_text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(theme.help_text_fg));
+    frame.render_widget(help_paragraph, inner_layout[1]);
 }
