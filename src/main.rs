@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono::Duration as ChronoDuration;
+use chrono::{prelude::*, Duration as ChronoDuration};
 use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
@@ -168,6 +168,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App) {
         InputMode::Normal => {
             // Global keybindings are only processed in Normal mode.
             if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
+                app.previous_view = app.current_view;
                 app.current_view = View::Settings;
                 return;
             }
@@ -177,6 +178,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App) {
                 View::TaskList => handle_tasklist_input(key, app),
                 View::Statistics => handle_stats_input(key, app),
                 View::Settings => handle_settings_input(key, app),
+                View::TaskDetails => handle_task_details_input(key, app),
             }
         }
     }
@@ -218,7 +220,10 @@ fn handle_timer_input(key: KeyEvent, app: &mut App) {
         KeyCode::Char('p') => app.set_mode(Mode::Pomodoro),
         KeyCode::Char('s') => app.set_mode(Mode::ShortBreak),
         KeyCode::Char('l') => app.set_mode(Mode::LongBreak),
-        KeyCode::Tab => app.current_view = View::TaskList,
+        KeyCode::Tab => {
+            app.previous_view = app.current_view;
+            app.current_view = View::TaskList;
+        }
         _ => {}
     }
 }
@@ -251,14 +256,17 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
         // Handle other keys without modifiers
         KeyEvent { code, .. } => match code {
             KeyCode::Char('q') => app.should_quit = true,
-            KeyCode::Tab => app.current_view = View::Statistics,
+            KeyCode::Tab => {
+                app.previous_view = app.current_view;
+                app.current_view = View::Statistics;
+            }
             KeyCode::Char('n') => app.input_mode = InputMode::Editing,
             KeyCode::Down | KeyCode::Char('j') => app.next_task(),
             KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
             KeyCode::Enter => app.complete_active_task(),
             KeyCode::Char(' ') => {
                 if app.active_task_index.is_some() {
-                    app.state = TimerState::Running;
+                    app.previous_view = app.current_view;
                     app.current_view = View::Timer;
                 }
             }
@@ -271,9 +279,18 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
 fn handle_stats_input(key: KeyEvent, app: &mut App) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Tab => app.current_view = View::Timer,
+        KeyCode::Tab => {
+            app.previous_view = app.current_view;
+            app.current_view = View::Timer;
+        }
         KeyCode::Down | KeyCode::Char('j') => app.next_completed_task(),
         KeyCode::Up | KeyCode::Char('k') => app.previous_completed_task(),
+        KeyCode::Enter => {
+            if app.completed_task_list_state.is_some() {
+                app.previous_view = app.current_view;
+                app.current_view = View::TaskDetails;
+            }
+        }
         KeyCode::Char('d') | KeyCode::Delete => app.delete_selected_completed_task(),
         _ => {}
     }
@@ -283,11 +300,20 @@ fn handle_stats_input(key: KeyEvent, app: &mut App) {
 fn handle_settings_input(key: KeyEvent, app: &mut App) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Tab => app.current_view = View::Timer,
+        KeyCode::Tab => app.current_view = app.previous_view,
         KeyCode::Up | KeyCode::Char('k') => app.previous_setting(),
         KeyCode::Down | KeyCode::Char('j') => app.next_setting(),
         KeyCode::Left | KeyCode::Char('h') => app.modify_setting(false),
         KeyCode::Right | KeyCode::Char('l') => app.modify_setting(true),
+        _ => {}
+    }
+}
+
+/// Handles key events for the Task Details view in Normal mode.
+fn handle_task_details_input(key: KeyEvent, app: &mut App) {
+    match key.code {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Esc | KeyCode::Enter => app.current_view = app.previous_view,
         _ => {}
     }
 }
@@ -315,6 +341,7 @@ fn ui(frame: &mut Frame, app: &mut App) {
         View::TaskList => draw_task_list(frame, app),
         View::Statistics => draw_statistics(frame, app),
         View::Settings => draw_settings(frame, app),
+        View::TaskDetails => draw_task_details(frame, app),
     }
 }
 
@@ -418,7 +445,7 @@ fn draw_timer(frame: &mut Frame, app: &App) {
     let bottom_info_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(50), // Top spacer
+            Constraint::Percentage(50), // Top Spacer
             Constraint::Length(1),      // Task Name
             Constraint::Length(1),      // Status
             Constraint::Length(1),      // Progress Bar
@@ -632,9 +659,9 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
     frame.render_stateful_widget(list, chunks[2], &mut list_state);
 
     let help_text = if chunks[3].width > 80 {
-        " [Tab] Timer | [↑/↓] Navigate | [d]elete Selected Task | [q] Quit "
+        " [Tab] Timer | [↑/↓] Navigate | [Enter] Details | [d]elete Selected Task | [q] Quit "
     } else {
-        " [Tab] [↑/↓] [d] [q] "
+        " [Tab] [↑/↓] [Ent] [d] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)
@@ -646,5 +673,91 @@ fn draw_statistics(frame: &mut Frame, app: &mut App) {
             )
             .alignment(Alignment::Center),
         chunks[3],
+    );
+}
+
+/// Renders the Task Details view.
+fn draw_task_details(frame: &mut Frame, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
+        .split(frame.area());
+
+    let title = Block::default()
+        .title("📄 Task Details")
+        .title_alignment(Alignment::Center);
+    frame.render_widget(title, chunks[0]);
+
+    let main_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .padding(Padding::uniform(1));
+    let inner_area = main_block.inner(chunks[1]);
+    frame.render_widget(main_block, chunks[1]);
+
+    if let Some(selected_completed_index) = app.completed_task_list_state {
+        let completed_tasks: Vec<_> = app.tasks.iter().filter(|t| t.completed).collect();
+        if let Some(task) = completed_tasks.get(selected_completed_index) {
+            let created: DateTime<Local> = task.creation_date.into();
+            let completed_str = task.completion_date.map_or_else(
+                || "N/A".to_string(),
+                |dt| {
+                    let local_dt: DateTime<Local> = dt.into();
+                    local_dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                },
+            );
+            let time_spent_formatted = format!(
+                "{}h {}m {}s",
+                task.time_spent.as_secs() / 3600,
+                (task.time_spent.as_secs() % 3600) / 60,
+                task.time_spent.as_secs() % 60
+            );
+            let time_to_complete_str = if let (Some(completed), created) = (task.completion_date, task.creation_date) {
+                let duration = completed.signed_duration_since(created);
+                let days = duration.num_days();
+                let hours = duration.num_hours() % 24;
+                let mins = duration.num_minutes() % 60;
+                format!("{}d {}h {}m", days, hours, mins)
+            } else {
+                "N/A".to_string()
+            };
+
+            let rows = vec![
+                Row::new(vec![Cell::from("Task"), Cell::from(task.name.clone())]),
+                Row::new(vec![Cell::from("Status"), Cell::from("✅ Completed")]).style(Style::default().fg(Color::Green)),
+                Row::new(vec![Cell::from("Created"), Cell::from(created.format("%Y-%m-%d %H:%M").to_string())]),
+                Row::new(vec![Cell::from("Completed"), Cell::from(completed_str)]),
+                Row::new(vec![Cell::from("Time to Complete"), Cell::from(time_to_complete_str)]),
+                Row::new(vec![Cell::from("Time Focused"), Cell::from(time_spent_formatted)]),
+                Row::new(vec![Cell::from("Pomodoros"), Cell::from(format!("{} 🍅", task.pomodoros))]),
+            ];
+
+            let table = Table::new(rows, [Constraint::Length(20), Constraint::Min(20)])
+                .header(Row::new(vec!["Metric", "Value"]).style(Style::default().add_modifier(Modifier::BOLD)))
+                .block(Block::default().title("Statistics").borders(Borders::ALL))
+                .column_spacing(2);
+
+            frame.render_widget(table, inner_area);
+
+        } else {
+            let p = Paragraph::new("Error: Could not find selected task.").alignment(Alignment::Center);
+            frame.render_widget(p, inner_area);
+        }
+    } else {
+        let p = Paragraph::new("No task selected.").alignment(Alignment::Center);
+        frame.render_widget(p, inner_area);
+    };
+
+    let help_text = " [Esc / Enter] Back | [q] Quit ";
+    frame.render_widget(
+        Paragraph::new(help_text)
+            .block(
+                Block::default()
+                    .title("Controls")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+            )
+            .alignment(Alignment::Center),
+        chunks[2],
     );
 }
