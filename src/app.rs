@@ -1,4 +1,5 @@
 use crate::settings::{ColorTheme, Settings};
+use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -32,6 +33,8 @@ pub struct Task {
     pub completed: bool,
     pub pomodoros: u32,
     pub time_spent: Duration,
+    pub creation_date: DateTime<Utc>,
+    pub completion_date: Option<DateTime<Utc>>,
 }
 
 impl Task {
@@ -42,6 +45,8 @@ impl Task {
             completed: false,
             pomodoros: 0,
             time_spent: Duration::from_secs(0),
+            creation_date: Utc::now(),
+            completion_date: None,
         }
     }
 }
@@ -84,13 +89,14 @@ pub enum TimerState {
 }
 
 /// Represents the different views of the application.
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum View {
     Timer,
     #[default]
     TaskList,
     Statistics,
     Settings,
+    TaskDetails,
 }
 
 /// Represents the different input modes.
@@ -109,11 +115,11 @@ pub struct App {
     pub state: TimerState,
     pub time_remaining: Duration,
     pub pomodoros_completed_total: u32,
-    // --- FIX: Add serde(skip) to prevent saving/loading the quit state ---
-    // This flag is for session control only and should not be persisted.
     #[serde(skip)]
     pub should_quit: bool,
     pub current_view: View,
+    #[serde(skip)]
+    pub previous_view: View,
     pub tasks: Vec<Task>,
     pub active_task_index: Option<usize>,
     #[serde(skip)]
@@ -135,6 +141,7 @@ impl Default for App {
             pomodoros_completed_total: 0,
             should_quit: false,
             current_view: View::TaskList,
+            previous_view: View::TaskList,
             tasks: vec![],
             active_task_index: None,
             input_mode: InputMode::Normal,
@@ -269,8 +276,11 @@ impl App {
             if let Some(task) = self.tasks.get_mut(index) {
                 task.completed = !task.completed;
                 if task.completed {
+                    task.completion_date = Some(Utc::now());
                     self.state = TimerState::Paused;
                     self.reset_timer();
+                } else {
+                    task.completion_date = None;
                 }
             }
         }
@@ -327,6 +337,26 @@ impl App {
         };
 
         self.active_task_index = Some(uncompleted_tasks_indices[next_index_in_uncompleted]);
+    }
+
+    /// Moves the currently active task up in the list.
+    pub fn move_active_task_up(&mut self) {
+        if let Some(index) = self.active_task_index {
+            if index > 0 {
+                self.tasks.swap(index, index - 1);
+                self.active_task_index = Some(index - 1);
+            }
+        }
+    }
+
+    /// Moves the currently active task down in the list.
+    pub fn move_active_task_down(&mut self) {
+        if let Some(index) = self.active_task_index {
+            if index < self.tasks.len() - 1 {
+                self.tasks.swap(index, index + 1);
+                self.active_task_index = Some(index + 1);
+            }
+        }
     }
 
     // --- Statistics View Methods ---
