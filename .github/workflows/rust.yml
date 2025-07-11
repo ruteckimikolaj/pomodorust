@@ -2,26 +2,42 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: full
+  RUST_LOG: info
+  RUSTFLAGS: "-C link-arg=-s"
 
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        BUILD_TARGET:
+          - x86_64-pc-windows-gnu
+          - x86_64-unknown-linux-musl
+          - x86_64-apple-darwin
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
       - name: Install ALSA development libraries
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - name: Compile
-        id: compile
-        uses: rust-build/rust-build.action@v1.4.5
-        with:
-          RUSTTARGET: x86_64-unknown-linux-musl
-          UPLOAD_MODE: none
-      - name: Upload artifact
+      - name: Build binaries for ${{ matrix.BUILD_TARGET }}
+        run: cargo build --release --target ${{ matrix.BUILD_TARGET }}
+      - name: Run tests for ${{ matrix.BUILD_TARGET }}
+        run: cargo test --release --target ${{ matrix.BUILD_TARGET }}
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Binary
+          name: pomodorust-${{ matrix.BUILD_TARGET }}
+          path: target/${{ matrix.BUILD_TARGET }}/release/pomodorust
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v4
+        with:
           path: |
-            ${{ steps.compile.outputs.BUILT_ARCHIVE }}
-            ${{ steps.compile.outputs.BUILT_CHECKSUM }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
