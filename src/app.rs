@@ -1,15 +1,18 @@
 use crate::settings::{ColorTheme, Settings};
 use chrono::{DateTime, Utc};
-use directories::ProjectDirs;
+use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
 /// Helper function to get the path for the state file.
-fn get_data_path() -> Option<PathBuf> {
-    if let Some(proj_dirs) = ProjectDirs::from("com", "pomodorust", "Pomodorust") {
-        let mut path = proj_dirs.data_dir().to_path_buf();
+pub fn get_data_path() -> Option<PathBuf> {
+    if let Some(user_dirs) = UserDirs::new() {
+        let mut path = user_dirs.home_dir().to_path_buf();
+        path.push(".local");
+        path.push("share");
+        path.push("pomodorust");
         path.push("state.json");
         return Some(path);
     }
@@ -17,10 +20,12 @@ fn get_data_path() -> Option<PathBuf> {
 }
 
 /// Helper function to get the path for the config file.
-fn get_config_path() -> Option<PathBuf> {
-    if let Some(proj_dirs) = ProjectDirs::from("com", "pomodorust", "Pomodorust") {
-        let mut path = proj_dirs.config_dir().to_path_buf();
-        path.push("config.json");
+pub fn get_config_path() -> Option<PathBuf> {
+    if let Some(user_dirs) = UserDirs::new() {
+        let mut path = user_dirs.home_dir().to_path_buf();
+        path.push(".config");
+        path.push("pomodorust");
+        path.push("config.toml");
         return Some(path);
     }
     None
@@ -127,6 +132,7 @@ pub struct App {
     #[serde(skip)]
     pub current_input: String,
     pub completed_task_list_state: Option<usize>,
+    #[serde(skip)]
     pub settings: Settings,
     pub settings_selection: usize,
 }
@@ -154,29 +160,15 @@ impl Default for App {
 }
 
 impl App {
-    /// Creates a new App instance.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Loads an App instance from a file, or creates a new one.
-    pub fn load_or_new() -> Self {
-        let settings = if let Some(path) = get_config_path() {
-            fs::read_to_string(path)
-                .ok()
-                .and_then(|data| serde_json::from_str::<Settings>(&data).ok())
-                .unwrap_or_default()
-        } else {
-            Settings::default()
-        };
-
+    pub fn load_with_settings(settings: Settings) -> Self {
         let mut app: App = if let Some(path) = get_data_path() {
             fs::read_to_string(path)
                 .ok()
                 .and_then(|data| serde_json::from_str(&data).ok())
                 .unwrap_or_default()
         } else {
-            App::new()
+            App::default()
         };
 
         app.settings = settings;
@@ -186,6 +178,7 @@ impl App {
 
     /// Saves the current state of the app to a file.
     pub fn save(&self) {
+        // Save the main app state (tasks, etc.)
         if let Some(path) = get_data_path() {
             if let Some(parent) = path.parent() {
                 if fs::create_dir_all(parent).is_ok() {
@@ -195,15 +188,8 @@ impl App {
                 }
             }
         }
-        if let Some(path) = get_config_path() {
-            if let Some(parent) = path.parent() {
-                if fs::create_dir_all(parent).is_ok() {
-                    if let Ok(json) = serde_json::to_string_pretty(&self.settings) {
-                        let _ = fs::write(path, json);
-                    }
-                }
-            }
-        }
+        // Save the settings
+        self.settings.save();
     }
 
     /// Toggles the timer between running and paused states.

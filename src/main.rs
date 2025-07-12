@@ -22,7 +22,7 @@ mod app;
 mod settings;
 mod theme;
 use app::{App, InputMode, Mode, TimerState, View};
-use settings::draw_settings;
+use settings::{draw_settings, Settings};
 use theme::Theme;
 
 /// A simple Pomodoro timer for your terminal.
@@ -57,23 +57,23 @@ fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
     let mut terminal = setup_terminal()?;
-    let mut app = App::load_or_new();
+    
+    // Load settings from config file.
+    let mut settings = Settings::load();
 
     // Override settings from CLI arguments if provided.
     if let Some(duration) = cli.pomodoro_duration {
-        app.settings.pomodoro_duration = Duration::from_secs(duration * 60);
+        settings.pomodoro_duration = Duration::from_secs(duration * 60);
     }
     if let Some(duration) = cli.short_break_duration {
-        app.settings.short_break_duration = Duration::from_secs(duration * 60);
+        settings.short_break_duration = Duration::from_secs(duration * 60);
     }
     if let Some(duration) = cli.long_break_duration {
-        app.settings.long_break_duration = Duration::from_secs(duration * 60);
+        settings.long_break_duration = Duration::from_secs(duration * 60);
     }
     
-    // Ensure the timer reflects the potentially updated settings upon startup.
-    if app.state == TimerState::Paused {
-       app.time_remaining = app.mode.duration(&app.settings);
-    }
+    // Load app state with the final settings.
+    let mut app = App::load_with_settings(settings);
 
     run_app(&mut terminal, &mut app)?;
     restore_terminal(&mut terminal)?;
