@@ -1,127 +1,136 @@
-# This is a GitHub Actions workflow to build, test, and release your Rust project.
 name: Release
 
-# Controls when the action will run.
 on:
-  # Triggers the workflow on push events but only for the main branch
-  push:
-    branches: ["main"]
-    # Also trigger on version tags like v1.2.3
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+  release:
+    types: [published]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  # This job runs tests and lints on every push
-  test_and_lint:
-    name: Test and Lint
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: linux-aarch64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: macos-x86_64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: macos-aarch64
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust toolchain
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          targets: ${{ matrix.target }}
 
-      - name: Install ALSA development libraries
+      - name: Install cross
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Install dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
-      - name: Run linter (clippy)
-        run: cargo clippy -- -D warnings
-      - name: Run tests
-        run: cargo test
+      - name: Build
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
-  # This job creates a release and builds binaries when a tag is pushed
-  create_release:
-    name: Create Release
+      - name: Package
+        run: |
+          BIN_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].targets[] | select(.kind[] == "bin") | .name')
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            tar -czf ${BIN_NAME}-${{ matrix.name }}.tar.gz -C target/${{ matrix.target }}/release ${BIN_NAME}
+          else
+            tar -czf ${BIN_NAME}-${{ matrix.name }}.tar.gz -C target/${{ matrix.target }}/release ${BIN_NAME}
+          fi
 
-    # It needs the test_and_lint job to succeed first
-    needs: [test_and_lint]
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: "*.tar.gz"
+
+  # publish-cargo:
+  #   name: Publish to Cargo
+  #   runs-on: ubuntu-latest
+  #   needs: build
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@stable
+
+  #     - name: Publish to crates.io
+  #       run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  release:
+    name: Create GitHub Release
     runs-on: ubuntu-latest
+    needs: [build]
     steps:
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
+          path: artifacts
 
-      - name: Get release upload URL
-        run: echo "UPLOAD_URL=${{ steps.create_release.outputs.upload_url }}" >> $GITHUB_ENV
-
-      - name: Install ALSA development libraries
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-
-      - uses: actions/checkout@v3
-
-      # Build for Linux
-      - name: Build for Linux (x86_64)
+      - name: Move artifacts to release directory
         run: |
-          rustup target add x86_64-unknown-linux-gnu
-          cargo build --release --target x86_64-unknown-linux-gnu
-          tar -C target/x86_64-unknown-linux-gnu/release -czf pomodorust-linux-x86_64.tar.gz pomodorust
+          mkdir -p release
+          find artifacts -name "*.tar.gz" -exec mv {} release/ \;
 
-      # Build for macOS (Intel)
-      - name: Build for macOS (x86_64)
+      - name: Create checksums
         run: |
-          rustup target add x86_64-apple-darwin
-          cargo build --release --target x86_64-apple-darwin
-          tar -C target/x86_64-apple-darwin/release -czf pomodorust-macos-x86_64.tar.gz pomodorust
+          cd release
+          sha256sum *.tar.gz > checksums.txt
 
-      # Build for macOS (Apple Silicon)
-      - name: Build for macOS (aarch64)
-        run: |
-          rustup target add aarch64-apple-darwin
-          cargo build --release --target aarch64-apple-darwin
-          tar -C target/aarch64-apple-darwin/release -czf pomodorust-macos-aarch64.tar.gz pomodorust
-
-      # Upload all the binaries to the release
-      - name: Upload Release Assets
-        uses: actions/upload-release-asset@v1
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.tar.gz
+            release/checksums.txt
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ env.UPLOAD_URL }}
-          asset_path: ./pomodorust-linux-x86_64.tar.gz
-          asset_name: pomodorust-linux-x86_64.tar.gz
-          asset_content_type: application/gzip
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ env.UPLOAD_URL }}
-          asset_path: ./pomodorust-macos-x86_64.tar.gz
-          asset_name: pomodorust-macos-x86_64.tar.gz
-          asset_content_type: application/gzip
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ env.UPLOAD_URL }}
-          asset_path: ./pomodorust-macos-aarch64.tar.gz
-          asset_name: pomodorust-macos-aarch64.tar.gz
-          asset_content_type: application/gzip
 
-  # This job publishes the crate to crates.io
-  publish_crate:
-    name: Publish to crates.io
-    # This job only runs when a new version tag is pushed
-    if: startsWith(github.ref, 'refs/tags/')
-    # It needs the release to be created first
-    needs: [create_release]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Publish
-        # IMPORTANT: You need to add a secret named CARGO_REGISTRY_TOKEN to your repository
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
+  # homebrew:
+  #   name: Publish to Homebrew
+  #   runs-on: ubuntu-latest
+  #   needs: release
+  #   steps:
+  #     - name: Update Homebrew tap
+  #       uses: Justintime50/homebrew-releaser@v2
+  #       with:
+  #         homebrew_owner: ${{ github.repository_owner }}
+  #         homebrew_tap: homebrew-${{ github.event.repository.name }}
+  #         github_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+  #         commit_owner: ${{ github.actor }}
+  #         commit_email: ${{ github.actor }}@users.noreply.github.com
+  #         install: 'bin.install "${{ github.event.repository.name }}"'
+  #         test: 'assert_match("", shell_output("${{ github.event.repository.name }} --version"))'
+  #         target_darwin_amd64: true
+  #         target_darwin_arm64: true
+  #         target_linux_amd64: true
+  #         target_linux_arm64: true
