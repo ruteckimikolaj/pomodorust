@@ -1,58 +1,124 @@
-# .github/workflows/release.yml
+# This is a GitHub Actions workflow to build, test, and release your Rust project.
+name: Release
 
+# Controls when the action will run.
 on:
-  release:
-    types: [created]
+  # Triggers the workflow on push events but only for the main branch
+  push:
+    branches: ["main"]
+    # Also trigger on version tags like v1.2.3
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  release:
-    name: release ${{ matrix.target }}
+  # This job runs tests and lints on every push
+  test_and_lint:
+    name: Test and Lint
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # - target: x86_64-pc-windows-gnu
-          #   archive: zip
-          - target: x86_64-unknown-linux-musl
-            archive: tar.gz tar.xz tar.zst
-          - target: x86_64-apple-darwin
-            archive: zip
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Run linter (clippy)
+        run: cargo clippy -- -D warnings
+      - name: Run tests
+        run: cargo test
+
+  # This job creates a release and builds binaries when a tag is pushed
+  create_release:
+    name: Create Release
+    # This job only runs when a new version tag is pushed
+    if: startsWith(github.ref, 'refs/tags/')
+    # It needs the test_and_lint job to succeed first
+    needs: [test_and_lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Get release upload URL
+        run: echo "UPLOAD_URL=${{ steps.create_release.outputs.upload_url }}" >> $GITHUB_ENV
+
       - name: Install ALSA development libraries
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - name: Install Rust target ${{ matrix.BUILD_TARGET }}
-        run: rustup target add ${{ matrix.BUILD_TARGET }}
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: ${{ matrix.target }}
-          ARCHIVE_TYPES: ${{ matrix.archive }}
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Upload release artifacts
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: |
-            target/${{ matrix.target }}/pomodorust-${{ github.event.release.tag_name }}.${{ matrix.archive }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Notify release
-        run: echo "Release ${{ github.event.release.tag_name }} for ${{ matrix.target }} has been created and uploaded."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Post-release cleanup
+
+      - uses: actions/checkout@v3
+
+      # Build for Linux
+      - name: Build for Linux (x86_64)
         run: |
-          echo "Cleaning up build artifacts..."
-          rm -rf target/${{ matrix.target }}
-          echo "Build artifacts cleaned up."
+          rustup target add x86_64-unknown-linux-gnu
+          cargo build --release --target x86_64-unknown-linux-gnu
+          tar -C target/x86_64-unknown-linux-gnu/release -czf pomodorust-linux-x86_64.tar.gz pomodorust
+
+      # Build for macOS (Intel)
+      - name: Build for macOS (x86_64)
+        run: |
+          rustup target add x86_64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          tar -C target/x86_64-apple-darwin/release -czf pomodorust-macos-x86_64.tar.gz pomodorust
+
+      # Build for macOS (Apple Silicon)
+      - name: Build for macOS (aarch64)
+        run: |
+          rustup target add aarch64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+          tar -C target/aarch64-apple-darwin/release -czf pomodorust-macos-aarch64.tar.gz pomodorust
+
+      # Upload all the binaries to the release
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ env.UPLOAD_URL }}
+          asset_path: ./pomodorust-linux-x86_64.tar.gz
+          asset_name: pomodorust-linux-x86_64.tar.gz
+          asset_content_type: application/gzip
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ env.UPLOAD_URL }}
+          asset_path: ./pomodorust-macos-x86_64.tar.gz
+          asset_name: pomodorust-macos-x86_64.tar.gz
+          asset_content_type: application/gzip
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ env.UPLOAD_URL }}
+          asset_path: ./pomodorust-macos-aarch64.tar.gz
+          asset_name: pomodorust-macos-aarch64.tar.gz
+          asset_content_type: application/gzip
+
+  # This job publishes the crate to crates.io
+  publish_crate:
+    name: Publish to crates.io
+    # This job only runs when a new version tag is pushed
+    if: startsWith(github.ref, 'refs/tags/')
+    # It needs the release to be created first
+    needs: [create_release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Publish
+        # IMPORTANT: You need to add a secret named CARGO_REGISTRY_TOKEN to your repository
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
