@@ -36,8 +36,7 @@ jobs:
   # This job creates a release and builds binaries when a tag is pushed
   create_release:
     name: Create Release
-    # This job only runs when a new version tag is pushed
-    if: startsWith(github.ref, 'refs/tags/')
+
     # It needs the test_and_lint job to succeed first
     needs: [test_and_lint]
     runs-on: ubuntu-latest
