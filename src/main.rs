@@ -633,7 +633,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
     );
     let summary_text = vec![
         Line::from(format!("Total Pomodoros: {}", app.pomodoros_completed_total)),
-        Line::from(format!("Total Time Focused: {}", time_spent_formatted)),
+        Line::from(format!("Total Time Focused: {time_spent_formatted}")),
     ];
     frame.render_widget(
         Paragraph::new(summary_text)
@@ -728,7 +728,7 @@ fn draw_task_details(frame: &mut Frame, app: &App, theme: &Theme) {
                 let days = duration.num_days();
                 let hours = duration.num_hours() % 24;
                 let mins = duration.num_minutes() % 60;
-                format!("{}d {}h {}m", days, hours, mins)
+                format!("{days}d {hours}h {mins}m")
             } else {
                 "N/A".to_string()
             };
