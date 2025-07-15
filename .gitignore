@@ -21,3 +21,5 @@ target
 #.idea/
 
 /target
+.DS_Store
+.idea

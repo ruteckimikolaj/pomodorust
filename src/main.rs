@@ -25,7 +25,7 @@ use app::{App, InputMode, Mode, TimerState, View};
 use settings::{draw_settings, Settings};
 use theme::Theme;
 
-/// A simple Pomodoro timer for your terminal.
+/// An andvanced Pomodoro timer for your terminal.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {

@@ -1,5 +1,10 @@
-<img alt="Version" src="https://img.shields.io/badge/version-0.1.0-blue">
-<img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![License](https://img.shields.io/badge/license-ANCSA_4.0_international-blue)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)
+![Rust Version](https://img.shields.io/badge/rust-1.70.0-blue)
+![Crates.io](https://img.shields.io/crates/v/pomodorust)
+![Homebrew](https://img.shields.io/badge/homebrew-coming%20soon-orange)
+![GitHub Repo Stars](https://img.shields.io/github/stars/ruteckimikolaj/pomodorust?style=social)
 
 # Pomodorust 🍅
 
@@ -15,6 +20,9 @@ A minimalist, terminal-based Pomodoro timer written in Rust to help you stay foc
 - **Color Themes**: Personalize your experience with built-in themes (Default, Dracula, Solarized, Nord).
 - **Desktop Notifications**: Get native desktop notifications when a timer finishes.
 - **Cross-Platform**: Built with Rust, it runs on macOS, Linux, and Windows.
+
+## 📸 Screenshots
+![](/assets/all-gif.webp)
 
 ## 📦 Installation
 
