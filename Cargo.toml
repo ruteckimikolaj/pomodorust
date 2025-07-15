@@ -2,15 +2,20 @@
 name = "pomodorust"
 version = "0.1.0"
 edition = "2021"
-authors = ["Mikolaj Rutecki", "Mikolaj Rutecki <no-reply@rust-lang.org>"]
+authors = ["Mikolaj Rutecki", "Mikolaj Rutecki <ruteckimikolaj+crates.io@gmail.com>"]
 description = "A minimalist, powerful, terminal-based Pomodoro timer written in Rust"
 license = "CC-BY-NC-SA-4.0"
 repository = "https://github.com/ruteckimikolaj/pomodorust"
 homepage = "https://github.com/ruteckimikolaj/pomodorust"
-keywords = ["pomodoro", "tui", "productivity", "terminal", "cli", "tasks"]
-categories = ["Productivity", "Command Line Utilities"]
+keywords = ["pomodoro", "tasks", "productivity", "terminal", "cli"]
+categories = ["command-line-utilities"]
 readme = "README.md"
-
+exclude = [
+    ".github/*",
+    "assets/*",
+    "LICENSE",
+    "README.md",
+]
 
 [dependencies]
 ratatui = { version = "0.29.0", features = ["all-widgets"] }
