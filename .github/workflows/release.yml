@@ -21,12 +21,12 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             name: linux-aarch64
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            name: macos-x86_64
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            name: macos-aarch64
+          # - target: x86_64-apple-darwin
+          #   os: macos-latest
+          #   name: macos-x86_64
+          # - target: aarch64-apple-darwin
+          #   os: macos-latest
+          #   name: macos-aarch64
 
     steps:
       - name: Checkout
@@ -40,10 +40,6 @@ jobs:
       - name: Install cross
         if: matrix.os == 'ubuntu-latest'
         run: cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Install dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev alsa-dev
 
       - name: Build
         run: |
