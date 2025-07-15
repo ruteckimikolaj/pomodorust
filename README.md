@@ -1,8 +1,8 @@
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![License](https://img.shields.io/badge/License-CC%20%7C%20BY--NC--SA%204.0-green)
+![https://spdx.org/licenses/CC-BY-NC-SA-4.0.json](https://img.shields.io/badge/License-CC%20%7C%20BY--NC--SA%204.0-green)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)
 ![Rust Version](https://img.shields.io/badge/rust-1.70.0-blue)
-![Crates.io](https://img.shields.io/crates/v/pomodorust)
+![Crates.io](https://img.shields.io/crates/v0.1.0/pomodorust)
 ![Homebrew](https://img.shields.io/badge/homebrew-coming%20soon-orange)
 ![GitHub Repo Stars](https://img.shields.io/github/stars/ruteckimikolaj/pomodorust?style=social)
 
