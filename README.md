@@ -1,5 +1,5 @@
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![License](https://img.shields.io/badge/license-ANCSA_4.0_international-blue)
+![License](https://img.shields.io/badge/License-CC BY--NC--SA 4.0-green)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)
 ![Rust Version](https://img.shields.io/badge/rust-1.70.0-blue)
 ![Crates.io](https://img.shields.io/crates/v/pomodorust)
@@ -8,7 +8,7 @@
 
 # Pomodorust 🍅
 
-A minimalist, terminal-based Pomodoro timer written in Rust to help you stay focused and productive. This project was born out of a desire to learn Rust and create a practical tool for daily use.
+A minimalist, powerful, terminal-based Pomodoro timer written in Rust to help you stay focused and productive. This project was born out of a desire to learn Rust and create a practical tool for daily use.
 
 ## ✨ Features
 

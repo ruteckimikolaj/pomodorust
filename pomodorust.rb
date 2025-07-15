@@ -2,7 +2,7 @@
 # You would place this file in your Homebrew tap repository.
 # For example: your-github-username/homebrew-tap/Formula/pomodorust.rb
 class Pomodorust < Formula
-  desc "A minimalist, terminal-based Pomodoro timer written in Rust"
+  desc "A minimalist, powerful, terminal-based Pomodoro timer written in Rust"
   homepage "https://github.com/ruteckimikolaj/pomodorust"
   version "1.0.0"
 
