@@ -5,14 +5,11 @@ edition = "2021"
 authors = ["Mikolaj Rutecki", "Mikolaj Rutecki <no-reply@rust-lang.org>"]
 description = "A minimalist, powerful, terminal-based Pomodoro timer written in Rust"
 license = "CC-BY-NC-SA-4.0"
-license-file = "LICENSE"
 repository = "https://github.com/ruteckimikolaj/pomodorust"
 homepage = "https://github.com/ruteckimikolaj/pomodorust"
 keywords = ["pomodoro", "tui", "productivity", "terminal", "cli", "tasks"]
 categories = ["Productivity", "Command Line Utilities"]
 readme = "README.md"
-publish = ["https://crates.io/crates/pomodorust"]
-
 
 
 [dependencies]
