@@ -1,3 +1,7 @@
+mod settings;
+mod stats;
+mod task;
+mod timer;
 use pomodorust::app::App;
 
 #[test]

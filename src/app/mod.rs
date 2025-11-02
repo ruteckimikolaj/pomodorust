@@ -1,10 +1,15 @@
+pub mod task;
+pub mod types;
+
 use crate::settings::{ColorTheme, Settings};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
+use task::Task;
+use types::{InputMode, Mode, TimerState, View};
 
 /// Helper function to get the path for the state file.
 pub fn get_data_path() -> Option<PathBuf> {
@@ -29,87 +34,6 @@ pub fn get_config_path() -> Option<PathBuf> {
         return Some(path);
     }
     None
-}
-
-/// Represents a single task for the Pomodoro timer.
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Task {
-    pub name: String,
-    pub completed: bool,
-    pub pomodoros: u32,
-    pub time_spent: Duration,
-    pub creation_date: DateTime<Utc>,
-    pub completion_date: Option<DateTime<Utc>>,
-}
-
-impl Task {
-    /// Creates a new task with a given name.
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            completed: false,
-            pomodoros: 0,
-            time_spent: Duration::from_secs(0),
-            creation_date: Utc::now(),
-            completion_date: None,
-        }
-    }
-}
-
-/// Represents the different timer modes in the Pomodoro technique.
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum Mode {
-    #[default]
-    Pomodoro,
-    ShortBreak,
-    LongBreak,
-}
-
-impl Mode {
-    /// Returns the duration of the timer mode based on settings.
-    pub fn duration(&self, settings: &Settings) -> Duration {
-        match self {
-            Mode::Pomodoro => settings.pomodoro_duration,
-            Mode::ShortBreak => settings.short_break_duration,
-            Mode::LongBreak => settings.long_break_duration,
-        }
-    }
-
-    /// Returns the title of the timer mode.
-    pub fn title(&self) -> &'static str {
-        match self {
-            Mode::Pomodoro => "Pomodoro",
-            Mode::ShortBreak => "Short Break",
-            Mode::LongBreak => "Long Break",
-        }
-    }
-}
-
-/// Represents the current state of the timer.
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum TimerState {
-    #[default]
-    Paused,
-    Running,
-}
-
-/// Represents the different views of the application.
-#[derive(Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy, Debug)]
-pub enum View {
-    Timer,
-    #[default]
-    TaskList,
-    Statistics,
-    Settings,
-    TaskDetails,
-}
-
-/// Represents the different input modes.
-#[derive(Default)]
-pub enum InputMode {
-    #[default]
-    Normal,
-    Editing,
 }
 
 /// The main application state.

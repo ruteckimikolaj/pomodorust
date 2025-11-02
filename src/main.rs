@@ -19,7 +19,10 @@ use ratatui::{
 use rodio::{source::SineWave, OutputStream, Sink, Source};
 
 use pomodorust::{
-    app::{App, InputMode, Mode, TimerState, View},
+    app::{
+        types::{InputMode, Mode, TimerState, View},
+        App,
+    },
     settings::{draw_settings, Settings},
     theme::Theme,
 };

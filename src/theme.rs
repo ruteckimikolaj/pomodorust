@@ -20,7 +20,7 @@ pub struct Theme {
 }
 
 /// Parses a color string (hex or named) into a ratatui Color.
-fn parse_color(s: &str) -> Color {
+pub fn parse_color(s: &str) -> Color {
     if s.starts_with('#') {
         if let Ok(rgb) = u32::from_str_radix(&s[1..], 16) {
             let r = ((rgb >> 16) & 0xFF) as u8;
