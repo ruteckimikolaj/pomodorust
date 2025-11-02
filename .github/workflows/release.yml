@@ -1,8 +1,13 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: write
+  packages: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -36,6 +41,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
 
       - name: Install cross
         if: matrix.os == 'ubuntu-latest'
@@ -102,12 +113,20 @@ jobs:
       - name: Move artifacts to release directory
         run: |
           mkdir -p release
-          find artifacts -name "*.tar.gz" -exec mv {} release/ \;
+          find artifacts -name "*.tar.gz" -type f -exec cp {} release/ \;
+          ls -la release/
 
       - name: Create checksums
         run: |
           cd release
-          sha256sum *.tar.gz > checksums.txt
+          if [ -n "$(ls -A *.tar.gz 2>/dev/null)" ]; then
+            sha256sum *.tar.gz > checksums.txt
+            echo "Created checksums for:"
+            cat checksums.txt
+          else
+            echo "No .tar.gz files found in release directory!"
+            exit 1
+          fi
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
