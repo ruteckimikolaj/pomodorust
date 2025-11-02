@@ -160,6 +160,10 @@ impl Default for App {
 }
 
 impl App {
+    /// Creates a new `App` instance.
+    pub fn new() -> Self {
+        Self::default()
+    }
     /// Loads an App instance from a file, or creates a new one.
     pub fn load_with_settings(settings: Settings) -> Self {
         let mut app: App = if let Some(path) = get_data_path() {
@@ -431,12 +435,31 @@ impl App {
             }
             3 => {
                 // Theme
-                self.settings.theme = match self.settings.theme {
-                    ColorTheme::Default => ColorTheme::Dracula,
-                    ColorTheme::Dracula => ColorTheme::Solarized,
-                    ColorTheme::Solarized => ColorTheme::Nord,
-                    ColorTheme::Nord => ColorTheme::Default,
-                };
+                let mut themes = vec![
+                    ColorTheme::Default,
+                    ColorTheme::Dracula,
+                    ColorTheme::Solarized,
+                    ColorTheme::Nord,
+                ];
+                let mut custom_theme_names: Vec<String> =
+                    self.settings.custom_themes.keys().cloned().collect();
+                custom_theme_names.sort();
+                themes.extend(
+                    custom_theme_names
+                        .into_iter()
+                        .map(ColorTheme::Custom),
+                );
+
+                let current_theme_pos = themes.iter().position(|t| t == &self.settings.theme);
+
+                if let Some(pos) = current_theme_pos {
+                    let next_pos = if increase {
+                        (pos + 1) % themes.len()
+                    } else {
+                        (pos + themes.len() - 1) % themes.len()
+                    };
+                    self.settings.theme = themes[next_pos].clone();
+                }
             }
             4 => {
                 // Desktop Notifications

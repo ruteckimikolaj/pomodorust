@@ -18,12 +18,11 @@ use ratatui::{
 };
 use rodio::{source::SineWave, OutputStream, Sink, Source};
 
-mod app;
-mod settings;
-mod theme;
-use app::{App, InputMode, Mode, TimerState, View};
-use settings::{draw_settings, Settings};
-use theme::Theme;
+use pomodorust::{
+    app::{App, InputMode, Mode, TimerState, View},
+    settings::{draw_settings, Settings},
+    theme::Theme,
+};
 
 /// An andvanced Pomodoro timer for your terminal.
 #[derive(Parser, Debug)]
@@ -338,7 +337,7 @@ fn handle_editing_input(key: KeyEvent, app: &mut App) {
 
 /// Renders the user interface based on the current view.
 fn ui(frame: &mut Frame, app: &mut App) {
-    let theme = Theme::from_settings(app.settings.theme);
+    let theme = Theme::from_settings(app.settings.theme.clone(), &app.settings.custom_themes);
     match app.current_view {
         View::Timer => draw_timer(frame, app, &theme),
         View::TaskList => draw_task_list(frame, app, &theme),

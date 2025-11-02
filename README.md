@@ -17,7 +17,7 @@ A minimalist, powerful, terminal-based Pomodoro timer written in Rust to help yo
 - **Task Prioritization**: Reorder your active tasks to focus on what's most important.
 - **Detailed Statistics**: View details for completed tasks, including creation/completion dates and total time spent.
 - **Customizable Timers**: Set custom durations for pomodoro, short break, and long break sessions via command-line arguments.
-- **Color Themes**: Personalize your experience with built-in themes (Default, Dracula, Solarized, Nord).
+- **Color Themes**: Personalize your experience with built-in themes (Default, Dracula, Solarized, Nord) or create your own!
 - **Desktop Notifications**: Get native desktop notifications when a timer finishes.
 - **Cross-Platform**: Built with Rust, it runs on macOS, Linux, and Windows.
 
@@ -82,6 +82,31 @@ The application is controlled entirely with your keyboard. The controls are cont
 - `Enter`: View details for the selected task.
 - `d` / `Delete`: Delete the selected completed task.
 - `Tab`: Switch to the Timer view.
+
+### Custom Themes
+
+You can define your own color themes in the `config.toml` file, which is located in your user's config directory (e.g., `~/.config/pomodorust/config.toml`).
+
+Add a `[custom_themes]` section to your `config.toml` and define your themes like this:
+
+```toml
+[custom_themes.MyCoolTheme]
+pomodoro_color = "#ff0000"
+short_break_color = "lightgreen"
+long_break_color = "#0000ff"
+pomodoro_bg = "#331111"
+short_break_bg = "#113311"
+long_break_bg = "#111133"
+accent_color = "magenta"
+base_fg = "#dddddd"
+base_bg = "#111111"
+running_fg = "green"
+paused_fg = "yellow"
+highlight_bg = "#555555"
+help_text_fg = "#777777"
+```
+
+You can use hex codes (e.g., `"#ff0000"`) or named colors (e.g., `"lightgreen"`). Once you've defined a custom theme, it will be available in the settings menu.
 
 ## ❤️ Contributing
 

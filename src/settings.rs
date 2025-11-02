@@ -3,27 +3,47 @@ use ratatui::{
     widgets::{block::*, *},
 };
 use serde::{Deserialize, Serialize};
-use std::{fs, time::Duration};
+use std::{collections::HashMap, fs, time::Duration};
 
 use crate::app::{get_config_path, App};
 use crate::theme::Theme;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum ColorTheme {
     #[default]
     Default,
     Dracula,
     Solarized,
     Nord,
+    Custom(String),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct CustomTheme {
+    pub pomodoro_color: String,
+    pub short_break_color: String,
+    pub long_break_color: String,
+    pub pomodoro_bg: String,
+    pub short_break_bg: String,
+    pub long_break_bg: String,
+    pub accent_color: String,
+    pub base_fg: String,
+    pub base_bg: String,
+    pub running_fg: String,
+    pub paused_fg: String,
+    pub highlight_bg: String,
+    pub help_text_fg: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 struct SerializableSettings {
     pomodoro_duration_mins: u64,
     short_break_duration_mins: u64,
     long_break_duration_mins: u64,
     theme: ColorTheme,
     desktop_notifications: bool,
+    #[serde(default)]
+    custom_themes: HashMap<String, CustomTheme>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +53,7 @@ pub struct Settings {
     pub long_break_duration: Duration,
     pub theme: ColorTheme,
     pub desktop_notifications: bool,
+    pub custom_themes: HashMap<String, CustomTheme>,
 }
 
 impl From<SerializableSettings> for Settings {
@@ -43,6 +64,7 @@ impl From<SerializableSettings> for Settings {
             long_break_duration: Duration::from_secs(s.long_break_duration_mins * 60),
             theme: s.theme,
             desktop_notifications: s.desktop_notifications,
+            custom_themes: s.custom_themes,
         }
     }
 }
@@ -53,8 +75,9 @@ impl From<&Settings> for SerializableSettings {
             pomodoro_duration_mins: s.pomodoro_duration.as_secs() / 60,
             short_break_duration_mins: s.short_break_duration.as_secs() / 60,
             long_break_duration_mins: s.long_break_duration.as_secs() / 60,
-            theme: s.theme,
+            theme: s.theme.clone(),
             desktop_notifications: s.desktop_notifications,
+            custom_themes: s.custom_themes.clone(),
         }
     }
 }
@@ -67,6 +90,7 @@ impl Default for Settings {
             long_break_duration: Duration::from_secs(15 * 60),
             theme: ColorTheme::Default,
             desktop_notifications: true,
+            custom_themes: HashMap::new(),
         }
     }
 }
@@ -157,7 +181,16 @@ pub fn draw_settings(frame: &mut Frame, app: &mut App, theme: &Theme) {
         ]),
         Row::new(vec![
             Cell::from("Color Theme"),
-            Cell::from(format!("< {:?} >", app.settings.theme)),
+            Cell::from(format!(
+                "< {} >",
+                match &app.settings.theme {
+                    ColorTheme::Default => "Default",
+                    ColorTheme::Dracula => "Dracula",
+                    ColorTheme::Solarized => "Solarized",
+                    ColorTheme::Nord => "Nord",
+                    ColorTheme::Custom(name) => name,
+                }
+            )),
         ]),
         Row::new(vec![
             Cell::from("Desktop Notifications"),

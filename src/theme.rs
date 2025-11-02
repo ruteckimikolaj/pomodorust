@@ -1,5 +1,6 @@
-use crate::settings::ColorTheme;
+use crate::settings::{ColorTheme, CustomTheme};
 use ratatui::style::Color;
+use std::collections::HashMap;
 
 /// A struct that holds all the colors for a given theme.
 pub struct Theme {
@@ -18,14 +19,73 @@ pub struct Theme {
     pub help_text_fg: Color,
 }
 
+/// Parses a color string (hex or named) into a ratatui Color.
+fn parse_color(s: &str) -> Color {
+    if s.starts_with('#') {
+        if let Ok(rgb) = u32::from_str_radix(&s[1..], 16) {
+            let r = ((rgb >> 16) & 0xFF) as u8;
+            let g = ((rgb >> 8) & 0xFF) as u8;
+            let b = (rgb & 0xFF) as u8;
+            return Color::Rgb(r, g, b);
+        }
+    }
+    match s.to_lowercase().as_str() {
+        "black" => Color::Black,
+        "red" => Color::Red,
+        "green" => Color::Green,
+        "yellow" => Color::Yellow,
+        "blue" => Color::Blue,
+        "magenta" => Color::Magenta,
+        "cyan" => Color::Cyan,
+        "gray" => Color::Gray,
+        "darkgray" => Color::DarkGray,
+        "lightred" => Color::LightRed,
+        "lightgreen" => Color::LightGreen,
+        "lightyellow" => Color::LightYellow,
+        "lightblue" => Color::LightBlue,
+        "lightmagenta" => Color::LightMagenta,
+        "lightcyan" => Color::LightCyan,
+        "white" => Color::White,
+        _ => Color::Reset, // Fallback
+    }
+}
 impl Theme {
     /// Creates a Theme based on the ColorTheme enum from settings.
-    pub fn from_settings(theme_enum: ColorTheme) -> Self {
+    pub fn from_settings(
+        theme_enum: ColorTheme,
+        custom_themes: &HashMap<String, CustomTheme>,
+    ) -> Self {
         match theme_enum {
             ColorTheme::Default => Self::default(),
             ColorTheme::Dracula => Self::dracula(),
             ColorTheme::Solarized => Self::solarized(),
             ColorTheme::Nord => Self::nord(),
+            ColorTheme::Custom(name) => {
+                if let Some(custom_theme) = custom_themes.get(&name) {
+                    Self::from_custom(custom_theme)
+                } else {
+                    Self::default() // Fallback if custom theme not found
+                }
+            }
+        }
+    }
+
+    /// Creates a Theme from a CustomTheme definition.
+    pub fn from_custom(custom: &CustomTheme) -> Self {
+        Self {
+            pomodoro_color: parse_color(&custom.pomodoro_color),
+            short_break_color: parse_color(&custom.short_break_color),
+            long_break_color: parse_color(&custom.long_break_color),
+            pomodoro_bg: parse_color(&custom.pomodoro_bg),
+            short_break_bg: parse_color(&custom.short_break_bg),
+            long_break_bg: parse_color(&custom.long_break_bg),
+            accent_color: parse_color(&custom.accent_color),
+            base_fg: parse_color(&custom.base_fg),
+            base_bg: parse_color(&custom.base_bg),
+            running_fg: parse_color(&custom.running_fg),
+            paused_fg: parse_color(&custom.paused_fg),
+            highlight_bg: parse_color(&custom.highlight_bg),
+            help_text_fg: parse_color(&custom.help_text_fg),
         }
     }
 

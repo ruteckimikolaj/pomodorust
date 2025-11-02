@@ -17,6 +17,14 @@ exclude = [
     "README.md",
 ]
 
+[lib]
+name = "pomodorust"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pomodorust"
+path = "src/main.rs"
+
 [dependencies]
 ratatui = { version = "0.29.0", features = ["all-widgets"] }
 crossterm = "0.29.0"
