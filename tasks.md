@@ -24,7 +24,7 @@
 
 ## Code quality
 
-- [ ] **Split render functions out of `main.rs`** (`main.rs` is 776 lines)
+- [x] **Split render functions out of `main.rs`** (`main.rs` is 776 lines)
   `draw_timer`, `draw_task_list`, `draw_statistics`, `draw_task_details` could move to
   `src/ui.rs` (or `src/ui/` module). `draw_settings` already lives in `settings.rs` as
   the odd one out — unify the pattern either way.
