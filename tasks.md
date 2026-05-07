@@ -29,19 +29,19 @@
   `src/ui.rs` (or `src/ui/` module). `draw_settings` already lives in `settings.rs` as
   the odd one out — unify the pattern either way.
 
-- [ ] **Separate UI state from business state in `App`**
+- [x] **Separate UI state from business state in `App`**
   `settings_selection`, `completed_task_list_state`, `previous_view`, `input_mode`,
   `current_input` are pure UI cursor/input state mixed into the persisted `App` struct.
   Introduce a `UiState` struct for these so the persistence boundary is explicit.
 
-- [ ] **`settings_selection` should not persist to JSON**
+- [x] **`settings_selection` should not persist to JSON**
   It's a UI cursor; surviving restart is surprising. Mark `#[serde(skip)]`.
 
-- [ ] **Extract repeated duration-clamping logic in `modify_setting`** (`app.rs:411`)
+- [x] **Extract repeated duration-clamping logic in `modify_setting`** (`app.rs:411`)
   The Pomodoro / Short Break / Long Break arms each repeat the same
   `(current as i64 + delta).max(1)` pattern. Extract `fn bump_duration_mins`.
 
-- [ ] **Long break interval hardcoded to 4** (`app.rs:224`)
+- [x] **Long break interval hardcoded to 4** (`app.rs:224`)
   `% 4` is buried in `next_mode`. Should be a `Settings` field so it can be
   adjusted in the settings view alongside the other timer params.
 

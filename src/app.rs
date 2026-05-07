@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const SETTINGS_ROW_COUNT: usize = 5;
+const SETTINGS_ROW_COUNT: usize = 6;
 
 fn project_dirs() -> Option<ProjectDirs> {
     ProjectDirs::from("", "", "pomodorust")
@@ -101,7 +101,7 @@ pub enum InputMode {
     Editing,
 }
 
-/// The main application state.
+/// The main application state (business logic + persistence).
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct App {
@@ -112,18 +112,15 @@ pub struct App {
     #[serde(skip)]
     pub should_quit: bool,
     pub current_view: View,
-    #[serde(skip)]
-    pub previous_view: View,
     pub tasks: Vec<Task>,
     pub active_task_index: Option<usize>,
     #[serde(skip)]
-    pub input_mode: InputMode,
-    #[serde(skip)]
-    pub current_input: String,
-    pub completed_task_list_state: Option<usize>,
-    #[serde(skip)]
     pub settings: Settings,
-    pub settings_selection: usize,
+}
+
+fn bump_duration_mins(d: Duration, delta: i64) -> Duration {
+    let mins = (d.as_secs() / 60) as i64;
+    Duration::from_secs((mins + delta).max(1) as u64 * 60)
 }
 
 impl Default for App {
@@ -136,14 +133,9 @@ impl Default for App {
             pomodoros_completed_total: 0,
             should_quit: false,
             current_view: View::TaskList,
-            previous_view: View::TaskList,
             tasks: vec![],
             active_task_index: None,
-            input_mode: InputMode::Normal,
-            current_input: String::new(),
-            completed_task_list_state: None,
             settings,
-            settings_selection: 0,
         }
     }
 }
@@ -210,7 +202,8 @@ impl App {
                 }
             }
 
-            if self.pomodoros_completed_total % 4 == 0 {
+            let interval = self.settings.long_break_interval.max(1) as u32;
+            if self.pomodoros_completed_total % interval == 0 {
                 self.mode = Mode::LongBreak;
             } else {
                 self.mode = Mode::ShortBreak;
@@ -233,17 +226,6 @@ impl App {
         self.reset_timer();
     }
 
-    /// Adds a new task to the list from the current input.
-    pub fn submit_task(&mut self) {
-        if !self.current_input.is_empty() {
-            self.tasks.push(Task::new(self.current_input.clone()));
-            self.current_input.clear();
-            if self.tasks.len() == 1 {
-                self.active_task_index = Some(0);
-            }
-        }
-        self.input_mode = InputMode::Normal;
-    }
 
     /// Toggles the completion status of the active task.
     pub fn complete_active_task(&mut self) {
@@ -348,58 +330,30 @@ impl App {
             }
         }
     }
+}
 
-    // --- Statistics View Methods ---
+/// Transient UI navigation state — not persisted.
+pub struct UiState {
+    pub settings_selection: usize,
+    pub completed_task_list_state: Option<usize>,
+    pub previous_view: View,
+    pub input_mode: InputMode,
+    pub current_input: String,
+}
 
-    pub fn next_completed_task(&mut self) {
-        let completed_count = self.tasks.iter().filter(|t| t.completed).count();
-        if completed_count == 0 {
-            return;
-        }
-        let i = self.completed_task_list_state.map_or(0, |i| (i + 1) % completed_count);
-        self.completed_task_list_state = Some(i);
-    }
-
-    pub fn previous_completed_task(&mut self) {
-        let completed_count = self.tasks.iter().filter(|t| t.completed).count();
-        if completed_count == 0 {
-            return;
-        }
-        let i = self.completed_task_list_state.map_or(0, |i| {
-            if i == 0 {
-                completed_count - 1
-            } else {
-                i - 1
-            }
-        });
-        self.completed_task_list_state = Some(i);
-    }
-
-    /// Deletes the selected completed task.
-    pub fn delete_selected_completed_task(&mut self) {
-        if let Some(selected_index) = self.completed_task_list_state {
-            let completed_indices: Vec<usize> = self
-                .tasks
-                .iter()
-                .enumerate()
-                .filter(|(_, t)| t.completed)
-                .map(|(i, _)| i)
-                .collect();
-
-            if let Some(&task_index_to_delete) = completed_indices.get(selected_index) {
-                self.tasks.remove(task_index_to_delete);
-
-                if let Some(active_idx) = self.active_task_index {
-                    if active_idx > task_index_to_delete {
-                        self.active_task_index = Some(active_idx - 1);
-                    }
-                }
-                self.completed_task_list_state = None;
-            }
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            settings_selection: 0,
+            completed_task_list_state: None,
+            previous_view: View::TaskList,
+            input_mode: InputMode::Normal,
+            current_input: String::new(),
         }
     }
+}
 
-    // --- Settings View Methods ---
+impl UiState {
     pub fn next_setting(&mut self) {
         self.settings_selection = (self.settings_selection + 1) % SETTINGS_ROW_COUNT;
     }
@@ -412,44 +366,74 @@ impl App {
         }
     }
 
-    pub fn modify_setting(&mut self, increase: bool) {
+    pub fn modify_setting(&mut self, app: &mut App, increase: bool) {
         let delta: i64 = if increase { 1 } else { -1 };
         match self.settings_selection {
-            0 => {
-                // Pomodoro Duration
-                let current = self.settings.pomodoro_duration.as_secs() / 60;
-                let new = (current as i64 + delta).max(1);
-                self.settings.pomodoro_duration = Duration::from_secs(new as u64 * 60);
-            }
-            1 => {
-                // Short Break
-                let current = self.settings.short_break_duration.as_secs() / 60;
-                let new = (current as i64 + delta).max(1);
-                self.settings.short_break_duration = Duration::from_secs(new as u64 * 60);
-            }
-            2 => {
-                // Long Break
-                let current = self.settings.long_break_duration.as_secs() / 60;
-                let new = (current as i64 + delta).max(1);
-                self.settings.long_break_duration = Duration::from_secs(new as u64 * 60);
-            }
+            0 => app.settings.pomodoro_duration = bump_duration_mins(app.settings.pomodoro_duration, delta),
+            1 => app.settings.short_break_duration = bump_duration_mins(app.settings.short_break_duration, delta),
+            2 => app.settings.long_break_duration = bump_duration_mins(app.settings.long_break_duration, delta),
             3 => {
-                // Theme
-                self.settings.theme = match self.settings.theme {
+                app.settings.theme = match app.settings.theme {
                     ColorTheme::Default => ColorTheme::Dracula,
                     ColorTheme::Dracula => ColorTheme::Solarized,
                     ColorTheme::Solarized => ColorTheme::Nord,
                     ColorTheme::Nord => ColorTheme::Default,
                 };
             }
-            4 => {
-                // Desktop Notifications
-                self.settings.desktop_notifications = !self.settings.desktop_notifications;
+            4 => app.settings.desktop_notifications = !app.settings.desktop_notifications,
+            5 => {
+                let current = app.settings.long_break_interval as i64;
+                app.settings.long_break_interval = (current + delta).max(1) as u32;
             }
             _ => {}
         }
-        if self.state == TimerState::Paused {
-            self.reset_timer();
+        if app.state == TimerState::Paused {
+            app.reset_timer();
         }
+    }
+
+    pub fn next_completed_task(&mut self, app: &App) {
+        let count = app.tasks.iter().filter(|t| t.completed).count();
+        if count == 0 { return; }
+        let i = self.completed_task_list_state.map_or(0, |i| (i + 1) % count);
+        self.completed_task_list_state = Some(i);
+    }
+
+    pub fn previous_completed_task(&mut self, app: &App) {
+        let count = app.tasks.iter().filter(|t| t.completed).count();
+        if count == 0 { return; }
+        let i = self.completed_task_list_state.map_or(0, |i| {
+            if i == 0 { count - 1 } else { i - 1 }
+        });
+        self.completed_task_list_state = Some(i);
+    }
+
+    pub fn delete_selected_completed_task(&mut self, app: &mut App) {
+        if let Some(selected) = self.completed_task_list_state {
+            let completed_indices: Vec<usize> = app.tasks.iter().enumerate()
+                .filter(|(_, t)| t.completed)
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&idx) = completed_indices.get(selected) {
+                app.tasks.remove(idx);
+                if let Some(active) = app.active_task_index {
+                    if active > idx {
+                        app.active_task_index = Some(active - 1);
+                    }
+                }
+                self.completed_task_list_state = None;
+            }
+        }
+    }
+
+    pub fn submit_task(&mut self, app: &mut App) {
+        if !self.current_input.is_empty() {
+            app.tasks.push(Task::new(self.current_input.clone()));
+            self.current_input.clear();
+            if app.tasks.len() == 1 {
+                app.active_task_index = Some(0);
+            }
+        }
+        self.input_mode = InputMode::Normal;
     }
 }

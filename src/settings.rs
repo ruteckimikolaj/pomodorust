@@ -5,7 +5,7 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use std::{fs, time::Duration};
 
-use crate::app::{get_config_path, App};
+use crate::app::{get_config_path, App, UiState};
 use crate::theme::Theme;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Default)]
@@ -22,6 +22,7 @@ struct SerializableSettings {
     pomodoro_duration_mins: u64,
     short_break_duration_mins: u64,
     long_break_duration_mins: u64,
+    long_break_interval: u32,
     theme: ColorTheme,
     desktop_notifications: bool,
 }
@@ -31,6 +32,7 @@ pub struct Settings {
     pub pomodoro_duration: Duration,
     pub short_break_duration: Duration,
     pub long_break_duration: Duration,
+    pub long_break_interval: u32,
     pub theme: ColorTheme,
     pub desktop_notifications: bool,
 }
@@ -41,6 +43,7 @@ impl From<SerializableSettings> for Settings {
             pomodoro_duration: Duration::from_secs(s.pomodoro_duration_mins * 60),
             short_break_duration: Duration::from_secs(s.short_break_duration_mins * 60),
             long_break_duration: Duration::from_secs(s.long_break_duration_mins * 60),
+            long_break_interval: s.long_break_interval,
             theme: s.theme,
             desktop_notifications: s.desktop_notifications,
         }
@@ -53,6 +56,7 @@ impl From<&Settings> for SerializableSettings {
             pomodoro_duration_mins: s.pomodoro_duration.as_secs() / 60,
             short_break_duration_mins: s.short_break_duration.as_secs() / 60,
             long_break_duration_mins: s.long_break_duration.as_secs() / 60,
+            long_break_interval: s.long_break_interval,
             theme: s.theme,
             desktop_notifications: s.desktop_notifications,
         }
@@ -65,6 +69,7 @@ impl Default for Settings {
             pomodoro_duration: Duration::from_secs(25 * 60),
             short_break_duration: Duration::from_secs(5 * 60),
             long_break_duration: Duration::from_secs(15 * 60),
+            long_break_interval: 4,
             theme: ColorTheme::Default,
             desktop_notifications: true,
         }
@@ -123,7 +128,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-pub fn draw_settings(frame: &mut Frame, app: &mut App, theme: &Theme) {
+pub fn draw_settings(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme) {
     let area = centered_rect(60, 50, frame.area());
 
     let settings_block = Block::default()
@@ -132,10 +137,9 @@ pub fn draw_settings(frame: &mut Frame, app: &mut App, theme: &Theme) {
         .border_type(BorderType::Double)
         .style(Style::default().fg(theme.accent_color).bg(theme.base_bg))
         .title_alignment(Alignment::Center);
-    
+
     let inner_area = settings_block.inner(area);
 
-    // Create a layout to include a footer for help text
     let inner_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -163,21 +167,23 @@ pub fn draw_settings(frame: &mut Frame, app: &mut App, theme: &Theme) {
             Cell::from("Desktop Notifications"),
             Cell::from(format!("< {} >", if app.settings.desktop_notifications { "On" } else { "Off" })),
         ]),
+        Row::new(vec![
+            Cell::from("Long Break Interval"),
+            Cell::from(format!("< {} pomodoros >", app.settings.long_break_interval)),
+        ]),
     ].into_iter().map(|r| r.height(1).style(Style::default().fg(theme.base_fg))).collect::<Vec<Row>>();
 
     let mut table_state = TableState::default();
-    table_state.select(Some(app.settings_selection));
+    table_state.select(Some(ui.settings_selection));
 
     let table = Table::new(rows, [Constraint::Percentage(50), Constraint::Percentage(50)])
         .row_highlight_style(Style::default().bg(theme.highlight_bg).add_modifier(Modifier::BOLD))
         .highlight_symbol(">> ");
 
-    // Render the popup
-    frame.render_widget(Clear, area); // This clears the area before rendering the popup
+    frame.render_widget(Clear, area);
     frame.render_widget(settings_block, area);
     frame.render_stateful_widget(table, inner_layout[0], &mut table_state);
 
-    // Render the help text in the footer
     let help_text = " [↑/↓] Navigate | [←/→] Change | [Tab] Back ";
     let help_paragraph = Paragraph::new(help_text)
         .alignment(Alignment::Center)

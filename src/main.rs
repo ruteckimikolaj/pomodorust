@@ -21,7 +21,7 @@ use rodio::{source::SineWave, stream::DeviceSinkBuilder, Player, Source};
 mod app;
 mod settings;
 mod theme;
-use app::{App, InputMode, Mode, TimerState, View};
+use app::{App, InputMode, Mode, TimerState, UiState, View};
 use settings::{draw_settings, Settings};
 use theme::Theme;
 
@@ -96,14 +96,14 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
     terminal.show_cursor()
 }
 
-/// The main application loop.
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
 ) -> io::Result<()> {
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
-    
+    let mut ui_state = UiState::default();
+
     let audio_system = DeviceSinkBuilder::open_default_sink()
         .ok()
         .map(|sink| {
@@ -111,9 +111,8 @@ fn run_app(
             Box::new((sink, player))
         });
 
-
     loop {
-        terminal.draw(|f| ui(f, app))?;
+        terminal.draw(|f| ui(f, app, &ui_state))?;
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
@@ -121,7 +120,7 @@ fn run_app(
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                handle_key_event(key, app);
+                handle_key_event(key, app, &mut ui_state);
             }
         }
 
@@ -156,31 +155,26 @@ fn run_app(
     }
 }
 
-/// Central key event handler.
-fn handle_key_event(key: KeyEvent, app: &mut App) {
+fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     if key.kind != crossterm::event::KeyEventKind::Press {
         return;
     }
 
-    // Prioritize Editing mode to capture all key presses for text input.
-    match app.input_mode {
-        InputMode::Editing => {
-            handle_editing_input(key, app);
-        }
+    match ui.input_mode {
+        InputMode::Editing => handle_editing_input(key, app, ui),
         InputMode::Normal => {
-            // Global keybindings are only processed in Normal mode.
             if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
-                app.previous_view = app.current_view;
+                ui.previous_view = app.current_view;
                 app.current_view = View::Settings;
                 return;
             }
 
             match app.current_view {
-                View::Timer => handle_timer_input(key, app),
-                View::TaskList => handle_tasklist_input(key, app),
-                View::Statistics => handle_stats_input(key, app),
-                View::Settings => handle_settings_input(key, app),
-                View::TaskDetails => handle_task_details_input(key, app),
+                View::Timer => handle_timer_input(key, app, ui),
+                View::TaskList => handle_tasklist_input(key, app, ui),
+                View::Statistics => handle_stats_input(key, app, ui),
+                View::Settings => handle_settings_input(key, app, ui),
+                View::TaskDetails => handle_task_details_input(key, app, ui),
             }
         }
     }
@@ -213,8 +207,7 @@ fn show_desktop_notification(finished_mode: Mode, next_mode: Mode) {
         .show();
 }
 
-/// Handles key events for the Timer view in Normal mode.
-fn handle_timer_input(key: KeyEvent, app: &mut App) {
+fn handle_timer_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char(' ') => app.toggle_timer(),
@@ -223,17 +216,15 @@ fn handle_timer_input(key: KeyEvent, app: &mut App) {
         KeyCode::Char('s') => app.set_mode(Mode::ShortBreak),
         KeyCode::Char('l') => app.set_mode(Mode::LongBreak),
         KeyCode::Tab => {
-            app.previous_view = app.current_view;
+            ui.previous_view = app.current_view;
             app.current_view = View::TaskList;
         }
         _ => {}
     }
 }
 
-/// Handles key events for the TaskList view in Normal mode.
-fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
+fn handle_tasklist_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key {
-        // Handle task reordering with Shift modifier
         KeyEvent {
             code: KeyCode::Up,
             modifiers: KeyModifiers::SHIFT,
@@ -255,21 +246,20 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
             ..
         } => app.move_active_task_down(),
 
-        // Handle other keys without modifiers
         KeyEvent { code, .. } => match code {
             KeyCode::Char('q') => app.should_quit = true,
             KeyCode::Tab => {
-                app.previous_view = app.current_view;
+                ui.previous_view = app.current_view;
                 app.current_view = View::Statistics;
             }
-            KeyCode::Char('n') => app.input_mode = InputMode::Editing,
+            KeyCode::Char('n') => ui.input_mode = InputMode::Editing,
             KeyCode::Down | KeyCode::Char('j') => app.next_task(),
             KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
             KeyCode::Enter => app.complete_active_task(),
             KeyCode::Char('d') | KeyCode::Delete => app.delete_active_task(),
             KeyCode::Char(' ') => {
                 if app.active_task_index.is_some() {
-                    app.previous_view = app.current_view;
+                    ui.previous_view = app.current_view;
                     app.current_view = View::Timer;
                 }
             }
@@ -278,74 +268,67 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
     }
 }
 
-/// Handles key events for the Statistics view in Normal mode.
-fn handle_stats_input(key: KeyEvent, app: &mut App) {
+fn handle_stats_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Tab => {
-            app.previous_view = app.current_view;
+            ui.previous_view = app.current_view;
             app.current_view = View::Timer;
         }
-        KeyCode::Down | KeyCode::Char('j') => app.next_completed_task(),
-        KeyCode::Up | KeyCode::Char('k') => app.previous_completed_task(),
+        KeyCode::Down | KeyCode::Char('j') => ui.next_completed_task(app),
+        KeyCode::Up | KeyCode::Char('k') => ui.previous_completed_task(app),
         KeyCode::Enter => {
-            if app.completed_task_list_state.is_some() {
-                app.previous_view = app.current_view;
+            if ui.completed_task_list_state.is_some() {
+                ui.previous_view = app.current_view;
                 app.current_view = View::TaskDetails;
             }
         }
-        KeyCode::Char('d') | KeyCode::Delete => app.delete_selected_completed_task(),
+        KeyCode::Char('d') | KeyCode::Delete => ui.delete_selected_completed_task(app),
         _ => {}
     }
 }
 
-/// Handles key events for the Settings view in Normal mode.
-fn handle_settings_input(key: KeyEvent, app: &mut App) {
+fn handle_settings_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Tab => app.current_view = app.previous_view,
-        KeyCode::Up | KeyCode::Char('k') => app.previous_setting(),
-        KeyCode::Down | KeyCode::Char('j') => app.next_setting(),
-        KeyCode::Left | KeyCode::Char('h') => app.modify_setting(false),
-        KeyCode::Right | KeyCode::Char('l') => app.modify_setting(true),
+        KeyCode::Tab => app.current_view = ui.previous_view,
+        KeyCode::Up | KeyCode::Char('k') => ui.previous_setting(),
+        KeyCode::Down | KeyCode::Char('j') => ui.next_setting(),
+        KeyCode::Left | KeyCode::Char('h') => ui.modify_setting(app, false),
+        KeyCode::Right | KeyCode::Char('l') => ui.modify_setting(app, true),
         _ => {}
     }
 }
 
-/// Handles key events for the Task Details view in Normal mode.
-fn handle_task_details_input(key: KeyEvent, app: &mut App) {
+fn handle_task_details_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Esc | KeyCode::Enter => app.current_view = app.previous_view,
+        KeyCode::Esc | KeyCode::Enter => app.current_view = ui.previous_view,
         _ => {}
     }
 }
 
-/// Handles key events when in Editing mode for task input.
-fn handle_editing_input(key: KeyEvent, app: &mut App) {
+fn handle_editing_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
-        KeyCode::Enter => app.submit_task(),
-        KeyCode::Char(c) => app.current_input.push(c),
-        KeyCode::Backspace => {
-            app.current_input.pop();
-        }
+        KeyCode::Enter => ui.submit_task(app),
+        KeyCode::Char(c) => ui.current_input.push(c),
+        KeyCode::Backspace => { ui.current_input.pop(); }
         KeyCode::Esc => {
-            app.input_mode = InputMode::Normal;
-            app.current_input.clear();
+            ui.input_mode = InputMode::Normal;
+            ui.current_input.clear();
         }
         _ => {}
     }
 }
 
-/// Renders the user interface based on the current view.
-fn ui(frame: &mut Frame, app: &mut App) {
+fn ui(frame: &mut Frame, app: &App, ui_state: &UiState) {
     let theme = Theme::from_settings(app.settings.theme);
     match app.current_view {
         View::Timer => draw_timer(frame, app, &theme),
-        View::TaskList => draw_task_list(frame, app, &theme),
-        View::Statistics => draw_statistics(frame, app, &theme),
-        View::Settings => draw_settings(frame, app, &theme),
-        View::TaskDetails => draw_task_details(frame, app, &theme),
+        View::TaskList => draw_task_list(frame, app, ui_state, &theme),
+        View::Statistics => draw_statistics(frame, app, ui_state, &theme),
+        View::Settings => draw_settings(frame, app, ui_state, &theme),
+        View::TaskDetails => draw_task_details(frame, app, ui_state, &theme),
     }
 }
 
@@ -486,7 +469,7 @@ fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
     let total_duration = app.mode.duration(&app.settings).as_secs_f64();
     let remaining_duration = app.time_remaining.as_secs_f64();
     let progress_ratio = if total_duration > 0.0 {
-        (total_duration - remaining_duration) / total_duration
+        ((total_duration - remaining_duration) / total_duration).clamp(0.0, 1.0)
     } else {
         1.0
     };
@@ -523,7 +506,7 @@ fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
 }
 
 /// Renders the Task List view.
-fn draw_task_list(frame: &mut Frame, app: &mut App, theme: &Theme) {
+fn draw_task_list(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -571,21 +554,21 @@ fn draw_task_list(frame: &mut Frame, app: &mut App, theme: &Theme) {
         .highlight_symbol(">> ");
     frame.render_stateful_widget(active_list, chunks[1], &mut list_state);
 
-    let input = Paragraph::new(app.current_input.as_str())
-        .style(match app.input_mode {
+    let input = Paragraph::new(ui.current_input.as_str())
+        .style(match ui.input_mode {
             InputMode::Normal => Style::default().fg(theme.base_fg),
             InputMode::Editing => Style::default().fg(theme.paused_fg),
         })
         .block(Block::default().borders(Borders::ALL).title("New Task").style(Style::default().fg(theme.base_fg).bg(theme.base_bg)));
     frame.render_widget(input, chunks[2]);
-    if let InputMode::Editing = app.input_mode {
+    if let InputMode::Editing = ui.input_mode {
         frame.set_cursor_position((
-            chunks[2].x + app.current_input.len() as u16 + 1,
+            chunks[2].x + ui.current_input.len() as u16 + 1,
             chunks[2].y + 1,
         ));
     }
 
-    let help_text = match app.input_mode {
+    let help_text = match ui.input_mode {
         InputMode::Normal => {
             if chunks[3].width > 80 {
                 " [Tab] Stats | [↑/↓] Nav | [Shift+↑/↓] Move | [n] New | [Enter] Complete | [d] Delete | [q] Quit "
@@ -610,7 +593,7 @@ fn draw_task_list(frame: &mut Frame, app: &mut App, theme: &Theme) {
 }
 
 /// Renders the Statistics view.
-fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
+fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -650,7 +633,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
         .collect();
 
     let mut list_state = ListState::default();
-    list_state.select(app.completed_task_list_state);
+    list_state.select(ui.completed_task_list_state);
 
     let list_items: Vec<ListItem> = completed_tasks
         .iter()
@@ -687,7 +670,7 @@ fn draw_statistics(frame: &mut Frame, app: &mut App, theme: &Theme) {
 }
 
 /// Renders the Task Details view.
-fn draw_task_details(frame: &mut Frame, app: &App, theme: &Theme) {
+fn draw_task_details(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
@@ -707,7 +690,7 @@ fn draw_task_details(frame: &mut Frame, app: &App, theme: &Theme) {
     let inner_area = main_block.inner(chunks[1]);
     frame.render_widget(main_block, chunks[1]);
 
-    if let Some(selected_completed_index) = app.completed_task_list_state {
+    if let Some(selected_completed_index) = ui.completed_task_list_state {
         let completed_tasks: Vec<_> = app.tasks.iter().filter(|t| t.completed).collect();
         if let Some(task) = completed_tasks.get(selected_completed_index) {
             let created: DateTime<Local> = task.creation_date.into();
