@@ -48,6 +48,12 @@
 ---
 
 ## New features
+- [x] **Pomodoro history sparkline in Statistics view**
+  ratatui ships a `Sparkline` widget with zero new deps. Show last N days of
+  daily pomodoro counts above the completed task list.
+
+- [ ] **Search / filter active task list**
+  `/` key enters filter mode; typing narrows the list. Useful once the task list grows. Filter input field is replacing bottom bar with the shortcuts while used. Filter completed tasks in Statistics view as well.
 
 - [ ] **Rename / edit task name**
   No way to fix a typo without delete + recreate. Add `e` key in TaskList view to
@@ -64,17 +70,11 @@
   Show today's pomodoro count and focused time in the Statistics view summary block.
   Filter by `creation_date` >= start of today (already have `chrono`). maybe some nice chart ?
 
-- [ ] **Pomodoro history sparkline in Statistics view**
-  ratatui ships a `Sparkline` widget with zero new deps. Show last N days of
-  daily pomodoro counts above the completed task list.
+
 
 - [ ] **Task notes / description field**
   Add optional `notes: Option<String>` to `Task`. Show and edit in TaskDetails view.
   Allows tracking what was done in a session.
-
-- [ ] **Search / filter active task list**
-  `/` key enters filter mode; typing narrows the list. Useful once the task list grows. Filter input field is replacing bottom bar with the shortcuts while used. Filter completed tasks in Statistics view as well.
-
 
 ---
 
