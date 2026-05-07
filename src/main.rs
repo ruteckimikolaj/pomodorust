@@ -116,7 +116,7 @@ fn run_app(
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
-                handle_key_event(key, app, &mut ui_state);
+                handle_key_event(key, app, &mut ui_state, audio_system.as_deref().map(|b| &b.1));
             }
         }
 
@@ -151,7 +151,7 @@ fn run_app(
     }
 }
 
-fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState) {
+fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState, player: Option<&Player>) {
     if key.kind != crossterm::event::KeyEventKind::Press {
         return;
     }
@@ -167,7 +167,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState) {
             }
 
             match app.current_view {
-                View::Timer => handle_timer_input(key, app, ui),
+                View::Timer => handle_timer_input(key, app, ui, player),
                 View::TaskList => handle_tasklist_input(key, app, ui),
                 View::Statistics => handle_stats_input(key, app, ui),
                 View::Settings => handle_settings_input(key, app, ui),
@@ -204,14 +204,20 @@ fn show_desktop_notification(finished_mode: Mode, next_mode: Mode) {
         .show();
 }
 
-fn handle_timer_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
+fn handle_timer_input(key: KeyEvent, app: &mut App, ui: &mut UiState, player: Option<&Player>) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Char(' ') => app.toggle_timer(),
         KeyCode::Char('r') => app.reset_timer(),
-        KeyCode::Char('p') => app.set_mode(Mode::Pomodoro),
-        KeyCode::Char('s') => app.set_mode(Mode::ShortBreak),
-        KeyCode::Char('l') => app.set_mode(Mode::LongBreak),
+        KeyCode::Char('n') => {
+            let finished_mode = app.skip_segment();
+            if let Some(p) = player {
+                play_sound(p, finished_mode);
+            }
+            if app.settings.desktop_notifications {
+                show_desktop_notification(finished_mode, app.mode);
+            }
+        }
         KeyCode::Tab => {
             ui.previous_view = app.current_view;
             app.current_view = View::TaskList;

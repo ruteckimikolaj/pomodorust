@@ -59,10 +59,10 @@
   No way to fix a typo without delete + recreate. Add `e` key in TaskList view to
   re-enter Editing mode with the current task name pre-filled in `current_input`.
 
-- [ ] **Configurable long-break interval** (ties to bug above)
+- [x] **Configurable long-break interval** (ties to bug above)
   Add `long_break_interval: u32` to `Settings` (default 4). Expose in settings view.
 
-- [ ] **Skip current timer segment**
+- [x] **Skip current timer segment**
   Add `s` key in Timer view (or `n` for "next") to jump to the next mode immediately,
   the same as natural expiry — plays sound, shows notification, advances `next_mode`.
 

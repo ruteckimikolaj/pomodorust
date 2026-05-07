@@ -152,9 +152,9 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
     );
 
     let help_text = if main_layout[2].width > 80 {
-        " [Tab] Tasks | [o]ptions | [Space] Start/Pause | [r]eset | [p/s/l] Change Mode | [q]uit "
+        " [Tab] Tasks | [o]ptions | [Space] Start/Pause | [r]eset | [n]ext | [q]uit "
     } else {
-        " [Tab] [o] [Spc] [r] [p/s/l] [q] "
+        " [Tab] [o] [Spc] [r] [n] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)

@@ -204,9 +204,25 @@ impl App {
         previous_mode
     }
 
-    pub fn set_mode(&mut self, mode: Mode) {
-        self.mode = mode;
+    pub fn skip_segment(&mut self) -> Mode {
+        let previous_mode = self.mode;
+        if self.mode == Mode::Pomodoro {
+            let interval = self.settings.long_break_interval.max(1) as u32;
+            if (self.pomodoros_completed_total + 1) % interval == 0 {
+                self.mode = Mode::LongBreak;
+            } else {
+                self.mode = Mode::ShortBreak;
+            }
+        } else {
+            self.mode = Mode::Pomodoro;
+        }
         self.reset_timer();
+        if let Some(index) = self.active_task_index {
+            if !self.tasks[index].completed {
+                self.state = TimerState::Running;
+            }
+        }
+        previous_mode
     }
 
     pub fn complete_active_task(&mut self) {
