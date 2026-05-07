@@ -33,6 +33,13 @@ A minimalist, powerful, terminal-based Pomodoro timer written in Rust to help yo
 cargo install pomodorust
 ```
 
+### Using Homebrew ![Homebrew](https://shields.io)
+
+```shell
+brew tap ruteckimikolaj/homebrew-tap
+brew install pomodorust
+```
+
 ## 🚀 Usage
 
 ### Command-Line Arguments
