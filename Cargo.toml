@@ -1,6 +1,6 @@
 [package]
 name = "pomodorust"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Mikolaj Rutecki", "Mikolaj Rutecki <ruteckimikolaj+crates.io@gmail.com>"]
 description = "A minimalist, powerful, terminal-based Pomodoro timer written in Rust"
@@ -18,16 +18,18 @@ exclude = [
 ]
 
 [dependencies]
-ratatui = { version = "0.29.0", features = ["all-widgets"] }
+ratatui = { version = "0.30.0", features = ["all-widgets"] }
+ratatui-textarea = "0.9.1"
 crossterm = "0.29.0"
-chrono = { version = "0.4.41", features = ["serde"] }
-rodio = "0.20.1"
-serde = { version = "1.0.219", features = ["derive"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+rodio = "0.22.2"
+serde = { version = "1.0.228", features = ["derive"] }
 directories = "6.0.0"
-serde_json = "1.0.140"
-notify-rust = "4.11.7"
-clap = { version = "4.5.4", features = ["derive"] }
-toml = "0.8.13"
+serde_json = "1.0.149"
+rusqlite = { version = "0.31", features = ["bundled"] }
+notify-rust = "4.17.0"
+clap = { version = "4.6.1", features = ["derive"] }
+toml = "1.1.2"
 
 [profile.release]
 debug = false
@@ -40,12 +42,12 @@ overflow-checks = false
 [workspace.metadata.cross.target.aarch64-unknown-linux-gnu]
 pre-build = [
     "dpkg --add-architecture arm64",
-    "apt-get update && apt-get --assume-yes install libasound2-dev:arm64",
+    "apt-get update && apt-get --assume-yes install libasound2-dev:arm64 libdbus-1-dev:arm64",
 ]
 
 [workspace.metadata.cross.target.x86_64-unknown-linux-gnu]
 pre-build = [
-    "apt-get update && apt-get --assume-yes install libasound2-dev",
+    "apt-get update && apt-get --assume-yes install libasound2-dev libdbus-1-dev",
 ]
 
 
