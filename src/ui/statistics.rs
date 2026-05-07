@@ -4,6 +4,7 @@ use chrono::{Datelike, Local, Weekday};
 use ratatui::{prelude::*, widgets::*};
 
 use crate::app::{App, InputMode, UiState};
+use crate::app::ui_state::task_matches_filter;
 use crate::settings::Theme;
 
 // Below this total terminal width, collapse chart and show sparkline underneath
@@ -233,17 +234,7 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
     let completed_tasks: Vec<_> = app
         .tasks
         .iter()
-        .filter(|t| {
-            if !t.completed { return false; }
-            if filter.is_empty() { return true; }
-            let proj_match = t.project.as_deref().map_or(false, |p| {
-                let tag = format!("@{}", p.to_lowercase());
-                tag.contains(&filter) || p.to_lowercase().contains(&filter)
-            });
-            t.name.to_lowercase().contains(&filter)
-                || t.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(&filter))
-                || proj_match
-        })
+        .filter(|t| t.completed && (filter.is_empty() || task_matches_filter(t, &filter)))
         .collect();
     let mut list_state = ListState::default();
     list_state.select(ui.completed_task_list_state);

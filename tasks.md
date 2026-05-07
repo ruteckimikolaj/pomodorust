@@ -76,7 +76,7 @@
 - [x] **Grouping / projects**
   Add optional `project: Option<String>` to `Task`. Allow filtering by project in TaskList and Statistics views. Maybe add a "Projects" view that shows stats by project and lists tasks grouped by project.
 
-- [ ] **sqlite persistence**
+- [x] **sqlite persistence**
   Move from JSON file to SQLite for task and settings storage. This would allow more complex queries (e.g. filtering tasks by project or date range) and better performance as the task list grows. The `rusqlite` crate is a solid choice for this.
 
 ---

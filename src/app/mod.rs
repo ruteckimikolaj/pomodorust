@@ -17,6 +17,10 @@ pub fn get_data_path() -> Option<PathBuf> {
     project_dirs().map(|d| d.data_local_dir().join("state.json"))
 }
 
+pub fn get_db_path() -> Option<PathBuf> {
+    project_dirs().map(|d| d.data_local_dir().join("pomodorust.db"))
+}
+
 pub fn get_config_path() -> Option<PathBuf> {
     project_dirs().map(|d| d.config_dir().join("config.toml"))
 }
@@ -142,25 +146,57 @@ impl Default for App {
 
 impl App {
     pub fn load_with_settings(settings: Settings) -> Self {
-        let mut app: App = if let Some(path) = get_data_path() {
-            fs::read_to_string(path)
-                .ok()
-                .and_then(|data| serde_json::from_str(&data).ok())
-                .unwrap_or_default()
-        } else {
-            App::default()
-        };
+        if let Some(db_path) = get_db_path() {
+            if let Some(parent) = db_path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let is_new_db = !db_path.exists();
+            if let Ok(mut conn) = crate::db::open_and_init(&db_path) {
+                // One-time migration from legacy JSON on first run
+                if is_new_db {
+                    if let Some(legacy) = Self::try_load_json() {
+                        let _ = crate::db::save_to(&mut conn, &legacy);
+                        let mut app = legacy;
+                        app.settings = settings;
+                        app.time_remaining = app.mode.duration(&app.settings);
+                        return app;
+                    }
+                }
+                let s = crate::db::load_from(&conn);
+                let time_remaining = s.time_remaining_secs
+                    .map(Duration::from_secs)
+                    .unwrap_or_else(|| s.mode.duration(&settings));
+                return App {
+                    mode: s.mode,
+                    state: TimerState::Paused,
+                    time_remaining,
+                    pomodoros_completed_total: s.pomodoros_total,
+                    should_quit: false,
+                    current_view: s.current_view,
+                    tasks: s.tasks,
+                    active_task_index: s.active_task_index,
+                    settings,
+                };
+            }
+        }
+        let mut app = App::default();
         app.settings = settings;
         app.time_remaining = app.mode.duration(&app.settings);
         app
     }
 
+    fn try_load_json() -> Option<Self> {
+        let path = get_data_path()?;
+        let data = fs::read_to_string(path).ok()?;
+        serde_json::from_str(&data).ok()
+    }
+
     pub fn save(&self) {
-        if let Some(path) = get_data_path() {
-            if let Some(parent) = path.parent() {
+        if let Some(db_path) = get_db_path() {
+            if let Some(parent) = db_path.parent() {
                 if fs::create_dir_all(parent).is_ok() {
-                    if let Ok(json) = serde_json::to_string_pretty(&self) {
-                        let _ = fs::write(path, json);
+                    if let Ok(mut conn) = crate::db::open_and_init(&db_path) {
+                        let _ = crate::db::save_to(&mut conn, self);
                     }
                 }
             }

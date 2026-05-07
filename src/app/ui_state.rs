@@ -21,7 +21,7 @@ pub fn parse_project(input: &str) -> (String, Option<String>) {
     (input.trim().to_string(), None)
 }
 
-fn task_matches_filter(task: &Task, filter: &str) -> bool {
+pub fn task_matches_filter(task: &Task, filter: &str) -> bool {
     task.name.to_lowercase().contains(filter)
         || task.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(filter))
         || task.project.as_deref().map_or(false, |p| {

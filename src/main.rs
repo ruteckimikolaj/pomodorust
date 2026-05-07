@@ -15,6 +15,7 @@ use ratatui::prelude::*;
 use rodio::{source::SineWave, stream::DeviceSinkBuilder, Player, Source};
 
 mod app;
+mod db;
 mod settings;
 mod ui;
 use app::{App, InputMode, Mode, TimerState, UiState, View};

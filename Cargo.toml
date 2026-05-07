@@ -26,6 +26,7 @@ rodio = "0.22.2"
 serde = { version = "1.0.228", features = ["derive"] }
 directories = "6.0.0"
 serde_json = "1.0.149"
+rusqlite = { version = "0.31", features = ["bundled"] }
 notify-rust = "4.17.0"
 clap = { version = "4.6.1", features = ["derive"] }
 toml = "1.1.2"

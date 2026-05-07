@@ -34,7 +34,9 @@ pub fn draw_task_list(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme)
                 let tag = format!("@{}", p.to_lowercase());
                 tag.contains(&filter) || p.to_lowercase().contains(&filter)
             });
-            t.name.to_lowercase().contains(&filter) || proj_match
+            let notes_match = t.notes.as_deref()
+                .map_or(false, |n| n.to_lowercase().contains(&filter));
+            t.name.to_lowercase().contains(&filter) || proj_match || notes_match
         })
         .collect();
 
