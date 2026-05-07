@@ -52,7 +52,7 @@
   ratatui ships a `Sparkline` widget with zero new deps. Show last N days of
   daily pomodoro counts above the completed task list.
 
-- [ ] **Search / filter active task list**
+- [x] **Search / filter active task list**
   `/` key enters filter mode; typing narrows the list. Useful once the task list grows. Filter input field is replacing bottom bar with the shortcuts while used. Filter completed tasks in Statistics view as well.
 
 - [ ] **Rename / edit task name**

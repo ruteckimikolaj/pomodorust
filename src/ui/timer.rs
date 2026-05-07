@@ -47,7 +47,11 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
 
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(4)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(4),
+        ])
         .split(frame.area());
 
     frame.render_widget(
@@ -77,12 +81,20 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
 
     let vertical_center_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(5), Constraint::Min(1)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(5),
+            Constraint::Min(1),
+        ])
         .split(timer_area);
 
-    let time = ChronoDuration::from_std(app.time_remaining).unwrap_or_else(|_| ChronoDuration::zero());
+    let time =
+        ChronoDuration::from_std(app.time_remaining).unwrap_or_else(|_| ChronoDuration::zero());
     let time_text = format!("{:02}:{:02}", time.num_minutes(), time.num_seconds() % 60);
-    frame.render_widget(create_big_text_paragraph(&time_text, accent_style), vertical_center_layout[1]);
+    frame.render_widget(
+        create_big_text_paragraph(&time_text, accent_style),
+        vertical_center_layout[1],
+    );
 
     let bottom_info_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -96,7 +108,8 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
         .horizontal_margin(4)
         .split(vertical_center_layout[2]);
 
-    let task_name = app.active_task_index
+    let task_name = app
+        .active_task_index
         .and_then(|i| app.tasks.get(i))
         .map_or("No active task", |t| &t.name);
     frame.render_widget(
@@ -111,7 +124,9 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
         TimerState::Paused => ("⏸ Paused", paused_style),
     };
     frame.render_widget(
-        Paragraph::new(status_text).style(status_style).alignment(Alignment::Center),
+        Paragraph::new(status_text)
+            .style(status_style)
+            .alignment(Alignment::Center),
         bottom_info_layout[2],
     );
 
@@ -123,7 +138,9 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
         1.0
     };
     frame.render_widget(
-        Gauge::default().gauge_style(accent_style).ratio(progress_ratio),
+        Gauge::default()
+            .gauge_style(accent_style)
+            .ratio(progress_ratio),
         bottom_info_layout[3],
     );
 
@@ -135,15 +152,19 @@ pub fn draw_timer(frame: &mut Frame, app: &App, theme: &Theme) {
     );
 
     let help_text = if main_layout[2].width > 80 {
-        " [Tab] Tasks | [o] Options | [Space] Start/Pause | [r] Reset | [p/s/l] Change Mode | [q] Quit "
+        " [Tab] Tasks | [o]ptions | [Space] Start/Pause | [r]eset | [p/s/l] Change Mode | [q]uit "
     } else {
         " [Tab] [o] [Spc] [r] [p/s/l] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)
-            .block(Block::default().title("Controls").borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .style(Style::default().fg(theme.help_text_fg)))
+            .block(
+                Block::default()
+                    .title("Controls")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
+            )
             .alignment(Alignment::Center),
         main_layout[2],
     );

@@ -36,9 +36,14 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
         ])
         .split(frame.area());
 
+    let stats_title = if !ui.filter_input.is_empty() {
+        format!(" Σ STATISTICS [/{}] ", ui.filter_input)
+    } else {
+        " Σ STATISTICS ".to_string()
+    };
     frame.render_widget(
         Block::default()
-            .title(" Σ STATISTICS ")
+            .title(stats_title)
             .title_alignment(Alignment::Center)
             .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
         chunks[0],
@@ -52,11 +57,19 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
     );
     frame.render_widget(
         Paragraph::new(vec![
-            Line::from(format!("Total Pomodoros: {}", app.pomodoros_completed_total)),
+            Line::from(format!(
+                "Total Pomodoros: {}",
+                app.pomodoros_completed_total
+            )),
             Line::from(format!("Total Time Focused: {time_spent_formatted}")),
         ])
-        .block(Block::default().borders(Borders::ALL).title("Summary")
-            .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Summary")
+                .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
+        )
         .alignment(Alignment::Center),
         chunks[1],
     );
@@ -67,7 +80,8 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(" Last 14 days ")
+                    .border_type(BorderType::Rounded)
+                    .title("Last 14 days")
                     .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
             )
             .data(spark_data.iter().copied())
@@ -75,7 +89,12 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
         chunks[2],
     );
 
-    let completed_tasks: Vec<_> = app.tasks.iter().filter(|t| t.completed).collect();
+    let filter = ui.filter_input.to_lowercase();
+    let completed_tasks: Vec<_> = app
+        .tasks
+        .iter()
+        .filter(|t| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter)))
+        .collect();
     let mut list_state = ListState::default();
     list_state.select(ui.completed_task_list_state);
 
@@ -88,22 +107,35 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
         .collect();
 
     let list = List::new(list_items)
-        .block(Block::default().borders(Borders::ALL).title("Completed & Archived Tasks")
-            .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)))
-        .highlight_style(Style::default().bg(theme.highlight_bg).add_modifier(Modifier::BOLD))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Completed & Archived Tasks")
+                .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(theme.highlight_bg)
+                .add_modifier(Modifier::BOLD),
+        )
         .highlight_symbol(">> ");
     frame.render_stateful_widget(list, chunks[3], &mut list_state);
 
     let help_text = if chunks[4].width > 80 {
-        " [Tab] Timer | [↑/↓] Navigate | [Enter] Details | [d]elete Selected Task | [q] Quit "
+        " [Tab] Timer | [↑/↓] Navigate | [Enter] Details | [d]elete | [q]uit "
     } else {
         " [Tab] [↑/↓] [Ent] [d] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)
-            .block(Block::default().title("Controls").borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .style(Style::default().fg(theme.help_text_fg)))
+            .block(
+                Block::default()
+                    .title("Controls")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .style(Style::default().fg(theme.help_text_fg)),
+            )
             .alignment(Alignment::Center),
         chunks[4],
     );

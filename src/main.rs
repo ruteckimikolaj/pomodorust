@@ -158,6 +158,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState) {
 
     match ui.input_mode {
         InputMode::Editing => handle_editing_input(key, app, ui),
+        InputMode::Filtering => handle_filtering_input(key, ui),
         InputMode::Normal => {
             if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
                 ui.previous_view = app.current_view;
@@ -249,8 +250,9 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
                 app.current_view = View::Statistics;
             }
             KeyCode::Char('n') => ui.input_mode = InputMode::Editing,
-            KeyCode::Down | KeyCode::Char('j') => app.next_task(),
-            KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
+            KeyCode::Char('/') => ui.input_mode = InputMode::Filtering,
+            KeyCode::Down | KeyCode::Char('j') => ui.next_filtered_task(app),
+            KeyCode::Up | KeyCode::Char('k') => ui.previous_filtered_task(app),
             KeyCode::Enter => app.complete_active_task(),
             KeyCode::Char('d') | KeyCode::Delete => app.delete_active_task(),
             KeyCode::Char(' ') => {
@@ -300,6 +302,19 @@ fn handle_task_details_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Esc | KeyCode::Enter => app.current_view = ui.previous_view,
+        _ => {}
+    }
+}
+
+fn handle_filtering_input(key: KeyEvent, ui: &mut UiState) {
+    match key.code {
+        KeyCode::Char(c) => ui.filter_input.push(c),
+        KeyCode::Backspace => { ui.filter_input.pop(); }
+        KeyCode::Esc => {
+            ui.input_mode = InputMode::Normal;
+            ui.filter_input.clear();
+        }
+        KeyCode::Enter => ui.input_mode = InputMode::Normal,
         _ => {}
     }
 }

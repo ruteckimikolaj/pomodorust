@@ -9,6 +9,7 @@ pub struct UiState {
     pub previous_view: View,
     pub input_mode: InputMode,
     pub current_input: String,
+    pub filter_input: String,
 }
 
 impl Default for UiState {
@@ -19,6 +20,7 @@ impl Default for UiState {
             previous_view: View::TaskList,
             input_mode: InputMode::Normal,
             current_input: String::new(),
+            filter_input: String::new(),
         }
     }
 }
@@ -62,15 +64,22 @@ impl UiState {
         }
     }
 
+    fn filtered_completed_count(&self, app: &App) -> usize {
+        let filter = self.filter_input.to_lowercase();
+        app.tasks.iter()
+            .filter(|t| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter)))
+            .count()
+    }
+
     pub fn next_completed_task(&mut self, app: &App) {
-        let count = app.tasks.iter().filter(|t| t.completed).count();
+        let count = self.filtered_completed_count(app);
         if count == 0 { return; }
         let i = self.completed_task_list_state.map_or(0, |i| (i + 1) % count);
         self.completed_task_list_state = Some(i);
     }
 
     pub fn previous_completed_task(&mut self, app: &App) {
-        let count = app.tasks.iter().filter(|t| t.completed).count();
+        let count = self.filtered_completed_count(app);
         if count == 0 { return; }
         let i = self.completed_task_list_state.map_or(0, |i| {
             if i == 0 { count - 1 } else { i - 1 }
@@ -80,8 +89,9 @@ impl UiState {
 
     pub fn delete_selected_completed_task(&mut self, app: &mut App) {
         if let Some(selected) = self.completed_task_list_state {
+            let filter = self.filter_input.to_lowercase();
             let completed_indices: Vec<usize> = app.tasks.iter().enumerate()
-                .filter(|(_, t)| t.completed)
+                .filter(|(_, t)| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter)))
                 .map(|(i, _)| i)
                 .collect();
             if let Some(&idx) = completed_indices.get(selected) {
@@ -94,6 +104,34 @@ impl UiState {
                 self.completed_task_list_state = None;
             }
         }
+    }
+
+    pub fn next_filtered_task(&mut self, app: &mut App) {
+        let filter = self.filter_input.to_lowercase();
+        if filter.is_empty() { app.next_task(); return; }
+        let indices: Vec<usize> = app.tasks.iter().enumerate()
+            .filter(|(_, t)| !t.completed && t.name.to_lowercase().contains(&filter))
+            .map(|(i, _)| i)
+            .collect();
+        if indices.is_empty() { return; }
+        let cur = app.active_task_index.unwrap_or(usize::MAX);
+        let next = indices.iter().position(|&i| i == cur)
+            .map_or(0, |p| (p + 1) % indices.len());
+        app.active_task_index = Some(indices[next]);
+    }
+
+    pub fn previous_filtered_task(&mut self, app: &mut App) {
+        let filter = self.filter_input.to_lowercase();
+        if filter.is_empty() { app.previous_task(); return; }
+        let indices: Vec<usize> = app.tasks.iter().enumerate()
+            .filter(|(_, t)| !t.completed && t.name.to_lowercase().contains(&filter))
+            .map(|(i, _)| i)
+            .collect();
+        if indices.is_empty() { return; }
+        let cur = app.active_task_index.unwrap_or(usize::MAX);
+        let pos = indices.iter().position(|&i| i == cur).unwrap_or(0);
+        let prev = if pos == 0 { indices.len() - 1 } else { pos - 1 };
+        app.active_task_index = Some(indices[prev]);
     }
 
     pub fn submit_task(&mut self, app: &mut App) {

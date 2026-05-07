@@ -92,6 +92,7 @@ pub enum InputMode {
     #[default]
     Normal,
     Editing,
+    Filtering,
 }
 
 #[derive(Serialize, Deserialize)]
