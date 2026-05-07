@@ -122,7 +122,7 @@ jobs:
     needs: release
     steps:
       - name: Update Homebrew formula
-        uses: Justintime50/homebrew-releaser@v2
+        uses: Justintime50/homebrew-releaser@v3
         with:
           homebrew_owner: ruteckimikolaj
           homebrew_tap: homebrew-tap
