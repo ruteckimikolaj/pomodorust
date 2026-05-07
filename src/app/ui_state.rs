@@ -3,9 +3,31 @@ use ratatui_textarea::TextArea;
 use super::{App, InputMode, Task, TimerState, View, bump_duration_mins};
 use crate::settings::ColorTheme;
 
+/// Splits `"Buy milk @work"` → `("Buy milk", Some("work"))`.
+/// The `@tag` can appear anywhere; it is stripped from the name.
+pub fn parse_project(input: &str) -> (String, Option<String>) {
+    if let Some(at) = input.rfind('@') {
+        let rest = &input[at + 1..];
+        let end = rest.find(|c: char| !c.is_alphanumeric() && c != '_' && c != '-')
+            .unwrap_or(rest.len());
+        if end > 0 {
+            let project = rest[..end].to_string();
+            let name = format!("{}{}", &input[..at], &rest[end..]).trim().to_string();
+            if !name.is_empty() {
+                return (name, Some(project));
+            }
+        }
+    }
+    (input.trim().to_string(), None)
+}
+
 fn task_matches_filter(task: &Task, filter: &str) -> bool {
     task.name.to_lowercase().contains(filter)
         || task.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(filter))
+        || task.project.as_deref().map_or(false, |p| {
+            let tag = format!("@{}", p.to_lowercase());
+            tag.contains(filter) || p.to_lowercase().contains(filter)
+        })
 }
 
 const SETTINGS_ROW_COUNT: usize = 6;
@@ -208,7 +230,10 @@ impl UiState {
             if let Some(task) = app.tasks.get(idx) {
                 if !task.completed {
                     self.editing_task_index = Some(idx);
-                    self.current_input = task.name.clone();
+                    self.current_input = match &task.project {
+                        Some(p) => format!("{} @{}", task.name, p),
+                        None => task.name.clone(),
+                    };
                     self.input_mode = InputMode::Editing;
                 }
             }
@@ -218,15 +243,18 @@ impl UiState {
     pub fn submit_task(&mut self, app: &mut App) {
         if let Some(idx) = self.editing_task_index.take() {
             if !self.current_input.is_empty() {
+                let (name, project) = parse_project(&self.current_input);
                 if let Some(task) = app.tasks.get_mut(idx) {
-                    task.name = self.current_input.clone();
+                    task.name = name;
+                    task.project = project;
                 }
             }
             self.current_input.clear();
             self.input_mode = InputMode::Normal;
         } else {
             if !self.current_input.is_empty() {
-                app.tasks.push(Task::new(self.current_input.clone()));
+                let (name, project) = parse_project(&self.current_input);
+                app.tasks.push(Task::new(name, project));
                 self.current_input.clear();
                 if app.tasks.len() == 1 {
                     app.active_task_index = Some(0);

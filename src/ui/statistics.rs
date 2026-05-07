@@ -3,7 +3,7 @@ use std::time::Duration;
 use chrono::{Datelike, Local, Weekday};
 use ratatui::{prelude::*, widgets::*};
 
-use crate::app::{App, UiState};
+use crate::app::{App, InputMode, UiState};
 use crate::settings::Theme;
 
 // Below this total terminal width, collapse chart and show sparkline underneath
@@ -233,7 +233,17 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
     let completed_tasks: Vec<_> = app
         .tasks
         .iter()
-        .filter(|t| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter) || t.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(&filter))))
+        .filter(|t| {
+            if !t.completed { return false; }
+            if filter.is_empty() { return true; }
+            let proj_match = t.project.as_deref().map_or(false, |p| {
+                let tag = format!("@{}", p.to_lowercase());
+                tag.contains(&filter) || p.to_lowercase().contains(&filter)
+            });
+            t.name.to_lowercase().contains(&filter)
+                || t.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(&filter))
+                || proj_match
+        })
         .collect();
     let mut list_state = ListState::default();
     list_state.select(ui.completed_task_list_state);
@@ -241,18 +251,34 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
     let list_items: Vec<ListItem> = completed_tasks
         .iter()
         .map(|task| {
-            let content = format!("{:<40} | {} ●", task.name, task.pomodoros);
-            ListItem::new(Line::from(content)).style(Style::default().fg(theme.base_fg))
+            let mut spans = vec![
+                Span::styled(
+                    format!("{:<40} | {} ●", task.name, task.pomodoros),
+                    Style::default().fg(theme.base_fg),
+                ),
+            ];
+            if let Some(proj) = &task.project {
+                spans.push(Span::styled(
+                    format!(" @{}", proj),
+                    Style::default().fg(theme.accent_color),
+                ));
+            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
+    let task_list_title = if !filter.is_empty() {
+        format!("Completed & Archived Tasks [/{}]", ui.filter_input)
+    } else {
+        "Completed & Archived Tasks".to_string()
+    };
     frame.render_stateful_widget(
         List::new(list_items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .title("Completed & Archived Tasks")
+                    .title(task_list_title)
                     .style(Style::default().fg(theme.base_fg).bg(theme.base_bg)),
             )
             .highlight_style(Style::default().bg(theme.highlight_bg).add_modifier(Modifier::BOLD))
@@ -261,11 +287,35 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
         &mut list_state,
     );
 
-    // --- Help bar ---
+    // --- Help bar / filter bar ---
+    match ui.input_mode {
+        InputMode::Filtering => {
+            let filter_display = format!("/{}", ui.filter_input);
+            frame.render_widget(
+                Paragraph::new(filter_display.as_str())
+                    .style(Style::default().fg(theme.paused_fg))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_type(BorderType::Rounded)
+                            .title("Filter")
+                            .style(Style::default().fg(theme.accent_color)),
+                    ),
+                chunks[help_idx],
+            );
+            frame.set_cursor_position((
+                chunks[help_idx].x + 1 + 1 + ui.filter_input.len() as u16,
+                chunks[help_idx].y + 1,
+            ));
+            return;
+        }
+        _ => {}
+    }
+
     let help_text = if chunks[help_idx].width > 80 {
-        " [Tab] Timer | [↑/↓] Navigate | [Enter] Details | [d]elete | [q]uit "
+        " [Tab] Timer | [↑/↓] Navigate | [/] Filter | [Enter] Details | [d]elete | [q]uit "
     } else {
-        " [Tab] [↑/↓] [Ent] [d] [q] "
+        " [Tab] [↑/↓] [/] [Ent] [d] [q] "
     };
     frame.render_widget(
         Paragraph::new(help_text)

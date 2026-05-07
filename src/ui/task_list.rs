@@ -28,7 +28,13 @@ pub fn draw_task_list(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme)
         .iter()
         .enumerate()
         .filter(|(_, t)| {
-            !t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter))
+            if t.completed { return false; }
+            if filter.is_empty() { return true; }
+            let proj_match = t.project.as_deref().map_or(false, |p| {
+                let tag = format!("@{}", p.to_lowercase());
+                tag.contains(&filter) || p.to_lowercase().contains(&filter)
+            });
+            t.name.to_lowercase().contains(&filter) || proj_match
         })
         .collect();
 
@@ -50,12 +56,21 @@ pub fn draw_task_list(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme)
         .map(|(i, task)| {
             let running = Some(*i) == app.active_task_index && app.state == TimerState::Running;
             let marker = if running { "▶ " } else { "  " };
-            let style = if running {
+            let base_style = if running {
                 Style::default().fg(theme.pomodoro_color)
             } else {
                 Style::default().fg(theme.base_fg)
             };
-            ListItem::new(Line::from(format!("[ ] {}{}", marker, task.name))).style(style)
+            let mut spans = vec![
+                Span::styled(format!("[ ] {}{}", marker, task.name), base_style),
+            ];
+            if let Some(proj) = &task.project {
+                spans.push(Span::styled(
+                    format!(" @{}", proj),
+                    Style::default().fg(theme.accent_color),
+                ));
+            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 

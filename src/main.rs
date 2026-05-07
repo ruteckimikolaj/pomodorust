@@ -283,6 +283,7 @@ fn handle_stats_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
             ui.previous_view = app.current_view;
             app.current_view = View::Timer;
         }
+        KeyCode::Char('/') => ui.input_mode = InputMode::Filtering,
         KeyCode::Down | KeyCode::Char('j') => ui.next_completed_task(app),
         KeyCode::Up | KeyCode::Char('k') => ui.previous_completed_task(app),
         KeyCode::Enter => {

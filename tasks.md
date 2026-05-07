@@ -73,13 +73,19 @@
 - [x] **Task notes / description field** (ratatui-textarea modal)
   Add optional `notes: Option<String>` to `Task`. Show and edit in TaskDetails view.
   Allows tracking what was done in a session. we could consider using it for the search feature as well. and maybe use https://github.com/ratatui/ratatui-textarea for multi-line input.
-- [ ] **Grouping / projects**
+- [x] **Grouping / projects**
   Add optional `project: Option<String>` to `Task`. Allow filtering by project in TaskList and Statistics views. Maybe add a "Projects" view that shows stats by project and lists tasks grouped by project.
 
+- [ ] **sqlite persistence**
+  Move from JSON file to SQLite for task and settings storage. This would allow more complex queries (e.g. filtering tasks by project or date range) and better performance as the task list grows. The `rusqlite` crate is a solid choice for this.
 
 ---
 
 ## Nice-to-haves
+
+- [ ] **Recurring tasks**
+  Add `recurring: Option<Recurrence>` to `Task`. When a recurring task is completed, automatically create the next instance with an updated `creation_date`. `Recurrence` could be a simple enum (Daily, Weekly, etc.) or a more flexible struct with custom intervals.
+
 - [ ] **Grouping tasks by day in statistics view**
   Instead of one long list of completed tasks, group them by day with a header for each day. This would make it easier to see daily patterns and find specific completed tasks.
 

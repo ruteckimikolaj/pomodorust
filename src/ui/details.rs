@@ -89,7 +89,7 @@ pub fn draw_task_details(frame: &mut Frame, app: &App, ui: &UiState, theme: &The
         format!("{}d {}h {}m", d.num_days(), d.num_hours() % 24, d.num_minutes() % 60)
     });
 
-    let rows = vec![
+    let mut rows = vec![
         Row::new(vec![Cell::from("Task"), Cell::from(task.name.clone())]),
         Row::new(vec![Cell::from("Status"), Cell::from("✓ Completed")])
             .style(Style::default().fg(theme.running_fg)),
@@ -99,7 +99,14 @@ pub fn draw_task_details(frame: &mut Frame, app: &App, ui: &UiState, theme: &The
         Row::new(vec![Cell::from("Time Focused"), Cell::from(time_spent_fmt)]),
         Row::new(vec![Cell::from("Pomodoros"), Cell::from(format!("{} ●", task.pomodoros))]),
     ];
+    if let Some(proj) = &task.project {
+        rows.push(Row::new(vec![
+            Cell::from("Project"),
+            Cell::from(format!("@{}", proj)).style(Style::default().fg(theme.accent_color)),
+        ]));
+    }
 
+    let row_count = rows.len();
     let stats_table = Table::new(rows, [Constraint::Length(18), Constraint::Min(16)])
         .header(Row::new(vec!["Metric", "Value"]).style(Style::default().add_modifier(Modifier::BOLD)))
         .block(
@@ -150,7 +157,7 @@ pub fn draw_task_details(frame: &mut Frame, app: &App, ui: &UiState, theme: &The
         frame.render_widget(notes_widget, cols[1]);
     } else {
         // Narrow: stats fixed height, notes takes the rest
-        let rows_needed = 7u16 + 4; // 7 data rows + header + borders + padding
+        let rows_needed = row_count as u16 + 4; // data rows + header + borders + padding
         let vert = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(rows_needed), Constraint::Min(0)])
