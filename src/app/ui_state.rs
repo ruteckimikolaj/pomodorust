@@ -1,5 +1,12 @@
+use ratatui_textarea::TextArea;
+
 use super::{App, InputMode, Task, TimerState, View, bump_duration_mins};
 use crate::settings::ColorTheme;
+
+fn task_matches_filter(task: &Task, filter: &str) -> bool {
+    task.name.to_lowercase().contains(filter)
+        || task.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(filter))
+}
 
 const SETTINGS_ROW_COUNT: usize = 6;
 
@@ -11,6 +18,8 @@ pub struct UiState {
     pub current_input: String,
     pub filter_input: String,
     pub editing_task_index: Option<usize>,
+    pub notes_textarea: Option<TextArea<'static>>,
+    pub editing_notes_task_index: Option<usize>,
 }
 
 impl Default for UiState {
@@ -23,6 +32,8 @@ impl Default for UiState {
             current_input: String::new(),
             filter_input: String::new(),
             editing_task_index: None,
+            notes_textarea: None,
+            editing_notes_task_index: None,
         }
     }
 }
@@ -69,7 +80,7 @@ impl UiState {
     fn filtered_completed_count(&self, app: &App) -> usize {
         let filter = self.filter_input.to_lowercase();
         app.tasks.iter()
-            .filter(|t| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter)))
+            .filter(|t| t.completed && (filter.is_empty() || task_matches_filter(t, &filter)))
             .count()
     }
 
@@ -93,7 +104,7 @@ impl UiState {
         if let Some(selected) = self.completed_task_list_state {
             let filter = self.filter_input.to_lowercase();
             let completed_indices: Vec<usize> = app.tasks.iter().enumerate()
-                .filter(|(_, t)| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter)))
+                .filter(|(_, t)| t.completed && (filter.is_empty() || task_matches_filter(t, &filter)))
                 .map(|(i, _)| i)
                 .collect();
             if let Some(&idx) = completed_indices.get(selected) {
@@ -108,11 +119,67 @@ impl UiState {
         }
     }
 
+    fn open_notes_for_task(&mut self, idx: usize, app: &App) {
+        if let Some(task) = app.tasks.get(idx) {
+            let lines: Vec<String> = task.notes.as_deref()
+                .unwrap_or("")
+                .lines()
+                .map(|l| l.to_owned())
+                .collect();
+            let mut textarea = if lines.is_empty() {
+                TextArea::default()
+            } else {
+                TextArea::new(lines)
+            };
+            textarea.set_placeholder_text("Type your notes here…");
+            self.notes_textarea = Some(textarea);
+            self.editing_notes_task_index = Some(idx);
+            self.input_mode = InputMode::EditingNotes;
+        }
+    }
+
+    // Open notes editor for the selected completed task (called from TaskDetails)
+    pub fn start_edit_notes(&mut self, app: &App) {
+        if let Some(selected) = self.completed_task_list_state {
+            let filter = self.filter_input.to_lowercase();
+            if let Some(idx) = app.tasks.iter().enumerate()
+                .filter(|(_, t)| t.completed && (filter.is_empty() || task_matches_filter(t, &filter)))
+                .nth(selected)
+                .map(|(i, _)| i)
+            {
+                self.open_notes_for_task(idx, app);
+            }
+        }
+    }
+
+    // Open notes editor for the active task (called from TaskList)
+    pub fn start_edit_notes_active(&mut self, app: &App) {
+        if let Some(idx) = app.active_task_index {
+            self.open_notes_for_task(idx, app);
+        }
+    }
+
+    pub fn submit_notes(&mut self, app: &mut App) {
+        if let (Some(textarea), Some(idx)) = (self.notes_textarea.take(), self.editing_notes_task_index.take()) {
+            if let Some(task) = app.tasks.get_mut(idx) {
+                let text = textarea.lines().join("\n");
+                task.notes = if text.trim().is_empty() { None } else { Some(text) };
+            }
+        }
+        self.input_mode = InputMode::Normal;
+    }
+
+    pub fn cancel_notes(&mut self) {
+        self.notes_textarea = None;
+        self.editing_notes_task_index = None;
+        self.input_mode = InputMode::Normal;
+    }
+
     pub fn next_filtered_task(&mut self, app: &mut App) {
         let filter = self.filter_input.to_lowercase();
         if filter.is_empty() { app.next_task(); return; }
         let indices: Vec<usize> = app.tasks.iter().enumerate()
-            .filter(|(_, t)| !t.completed && t.name.to_lowercase().contains(&filter))
+            .filter(|(_, t)| !t.completed && task_matches_filter(t, &filter))
             .map(|(i, _)| i)
             .collect();
         if indices.is_empty() { return; }
@@ -126,7 +193,7 @@ impl UiState {
         let filter = self.filter_input.to_lowercase();
         if filter.is_empty() { app.previous_task(); return; }
         let indices: Vec<usize> = app.tasks.iter().enumerate()
-            .filter(|(_, t)| !t.completed && t.name.to_lowercase().contains(&filter))
+            .filter(|(_, t)| !t.completed && task_matches_filter(t, &filter))
             .map(|(i, _)| i)
             .collect();
         if indices.is_empty() { return; }

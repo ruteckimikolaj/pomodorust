@@ -78,7 +78,7 @@ pub fn draw_task_list(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme)
     let input_title = if ui.editing_task_index.is_some() { "Rename Task" } else { "New Task" };
     let input = Paragraph::new(ui.current_input.as_str())
         .style(match ui.input_mode {
-            InputMode::Normal | InputMode::Filtering => Style::default().fg(theme.base_fg),
+            InputMode::Normal | InputMode::Filtering | InputMode::EditingNotes => Style::default().fg(theme.base_fg),
             InputMode::Editing => Style::default().fg(theme.paused_fg),
         })
         .block(
@@ -121,9 +121,9 @@ pub fn draw_task_list(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme)
                 InputMode::Editing => " [Enter] Submit | [Esc] Cancel ",
                 _ => {
                     if chunks[3].width > 80 {
-                        " [Tab] Stats | [↑/↓] Nav | [Shift+↑/↓] Move | [n]ew | [e]dit | [/] Filter | [Enter] Complete | [d]elete | [q]uit "
+                        " [Tab] Stats | [↑/↓] Nav | [S+↑/↓] Move | [n]ew | [e]dit name | [Shift+E] notes | [/] Filter | [Enter] Complete | [d]elete | [q]uit "
                     } else {
-                        " [Tab] [↑/↓] [S+↑/↓] [n] [e] [/] [Ent] [d] [q] "
+                        " [Tab] [↑/↓] [S+↑/↓] [n] [e] [E] [/] [Ent] [d] [q] "
                     }
                 }
             };

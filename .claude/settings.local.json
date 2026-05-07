@@ -28,7 +28,9 @@
       "mcp__precision-search__activate_project",
       "mcp__precision-search__get_symbols_overview",
       "mcp__precision-search__find_symbol",
-      "Bash(cargo check *)"
+      "Bash(cargo check *)",
+      "Bash(cargo fetch *)",
+      "Bash(xargs cat)"
     ]
   },
   "enabledMcpjsonServers": [

@@ -24,6 +24,8 @@ pub fn get_config_path() -> Option<PathBuf> {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Task {
     pub name: String,
+    #[serde(default)]
+    pub notes: Option<String>,
     pub completed: bool,
     pub pomodoros: u32,
     pub time_spent: Duration,
@@ -35,6 +37,7 @@ impl Task {
     pub fn new(name: String) -> Self {
         Self {
             name,
+            notes: None,
             completed: false,
             pomodoros: 0,
             time_spent: Duration::from_secs(0),
@@ -93,6 +96,7 @@ pub enum InputMode {
     Normal,
     Editing,
     Filtering,
+    EditingNotes,
 }
 
 #[derive(Serialize, Deserialize)]

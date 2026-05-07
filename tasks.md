@@ -70,7 +70,7 @@
   Show today's pomodoro count and focused time in the Statistics view summary block.
   Filter by `creation_date` >= start of today (already have `chrono`). maybe some nice chart ?
 
-- [ ] **Task notes / description field**
+- [x] **Task notes / description field** (ratatui-textarea modal)
   Add optional `notes: Option<String>` to `Task`. Show and edit in TaskDetails view.
   Allows tracking what was done in a session. we could consider using it for the search feature as well. and maybe use https://github.com/ratatui/ratatui-textarea for multi-line input.
 - [ ] **Grouping / projects**

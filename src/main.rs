@@ -19,7 +19,8 @@ mod settings;
 mod ui;
 use app::{App, InputMode, Mode, TimerState, UiState, View};
 use settings::{Settings, Theme};
-use ui::{draw_settings, draw_statistics, draw_task_details, draw_task_list, draw_timer};
+use ratatui_textarea::Input;
+use ui::{draw_notes_modal, draw_settings, draw_statistics, draw_task_details, draw_task_list, draw_timer};
 
 /// An andvanced Pomodoro timer for your terminal.
 #[derive(Parser, Debug)]
@@ -159,6 +160,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState, player: Opti
     match ui.input_mode {
         InputMode::Editing => handle_editing_input(key, app, ui),
         InputMode::Filtering => handle_filtering_input(key, ui),
+        InputMode::EditingNotes => handle_editing_notes_input(key, app, ui),
         InputMode::Normal => {
             if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::NONE {
                 ui.previous_view = app.current_view;
@@ -257,6 +259,7 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
             }
             KeyCode::Char('n') => ui.input_mode = InputMode::Editing,
             KeyCode::Char('e') => ui.start_rename(app),
+            KeyCode::Char('E') if key.modifiers == KeyModifiers::SHIFT => ui.start_edit_notes_active(app),
             KeyCode::Char('/') => ui.input_mode = InputMode::Filtering,
             KeyCode::Down | KeyCode::Char('j') => ui.next_filtered_task(app),
             KeyCode::Up | KeyCode::Char('k') => ui.previous_filtered_task(app),
@@ -308,8 +311,28 @@ fn handle_settings_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
 fn handle_task_details_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Char('E') if key.modifiers == KeyModifiers::SHIFT => ui.start_edit_notes(app),
         KeyCode::Esc | KeyCode::Enter => app.current_view = ui.previous_view,
         _ => {}
+    }
+}
+
+fn handle_editing_notes_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
+    match key {
+        // Ctrl+S — save
+        KeyEvent { code: KeyCode::Char('s'), modifiers: KeyModifiers::CONTROL, .. } => {
+            ui.submit_notes(app);
+        }
+        // Esc — cancel
+        KeyEvent { code: KeyCode::Esc, .. } => {
+            ui.cancel_notes();
+        }
+        // Everything else goes to the textarea
+        _ => {
+            if let Some(textarea) = &mut ui.notes_textarea {
+                textarea.input(Input::from(key));
+            }
+        }
     }
 }
 
@@ -348,6 +371,9 @@ fn ui(frame: &mut Frame, app: &App, ui_state: &UiState) {
         View::Statistics => draw_statistics(frame, app, ui_state, &theme),
         View::Settings => draw_settings(frame, app, ui_state, &theme),
         View::TaskDetails => draw_task_details(frame, app, ui_state, &theme),
+    }
+    if matches!(ui_state.input_mode, InputMode::EditingNotes) {
+        draw_notes_modal(frame, ui_state, &theme);
     }
 }
 

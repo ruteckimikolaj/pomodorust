@@ -19,6 +19,7 @@ exclude = [
 
 [dependencies]
 ratatui = { version = "0.30.0", features = ["all-widgets"] }
+ratatui-textarea = "0.9.1"
 crossterm = "0.29.0"
 chrono = { version = "0.4.44", features = ["serde"] }
 rodio = "0.22.2"

@@ -233,7 +233,7 @@ pub fn draw_statistics(frame: &mut Frame, app: &App, ui: &UiState, theme: &Theme
     let completed_tasks: Vec<_> = app
         .tasks
         .iter()
-        .filter(|t| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter)))
+        .filter(|t| t.completed && (filter.is_empty() || t.name.to_lowercase().contains(&filter) || t.notes.as_deref().map_or(false, |n| n.to_lowercase().contains(&filter))))
         .collect();
     let mut list_state = ListState::default();
     list_state.select(ui.completed_task_list_state);
