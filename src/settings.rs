@@ -1,6 +1,6 @@
 use ratatui::{
     prelude::*,
-    widgets::{block::*, *},
+    widgets::*,
 };
 use serde::{Deserialize, Serialize};
 use std::{fs, time::Duration};

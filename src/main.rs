@@ -14,9 +14,9 @@ use crossterm::{
 use notify_rust::Notification;
 use ratatui::{
     prelude::*,
-    widgets::{block::*, *},
+    widgets::*,
 };
-use rodio::{source::SineWave, OutputStream, Sink, Source};
+use rodio::{source::SineWave, stream::DeviceSinkBuilder, Player, Source};
 
 mod app;
 mod settings;
@@ -104,12 +104,12 @@ fn run_app(
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
     
-    // Move audio system to the heap to prevent potential stack overflow.
-    let audio_system = OutputStream::try_default().ok().and_then(|(stream, handle)| {
-        Sink::try_new(&handle)
-            .ok()
-            .map(|sink| Box::new((stream, sink))) // Wrap in a Box
-    });
+    let audio_system = DeviceSinkBuilder::open_default_sink()
+        .ok()
+        .map(|sink| {
+            let player = Player::connect_new(sink.mixer());
+            Box::new((sink, player))
+        });
 
 
     loop {
@@ -187,7 +187,7 @@ fn handle_key_event(key: KeyEvent, app: &mut App) {
 }
 
 /// Plays a sound notification based on the mode that just finished.
-fn play_sound(sink: &Sink, finished_mode: Mode) {
+fn play_sound(sink: &Player, finished_mode: Mode) {
     let (freq1, freq2, duration) = match finished_mode {
         Mode::Pomodoro => (440.0, 660.0, 150),
         _ => (660.0, 440.0, 150),

@@ -23,3 +23,6 @@ target
 /target
 .DS_Store
 .idea
+.mcp.json
+.tree-sitter-cache/
+.claude
