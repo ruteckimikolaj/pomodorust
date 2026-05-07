@@ -266,6 +266,7 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App) {
             KeyCode::Down | KeyCode::Char('j') => app.next_task(),
             KeyCode::Up | KeyCode::Char('k') => app.previous_task(),
             KeyCode::Enter => app.complete_active_task(),
+            KeyCode::Char('d') | KeyCode::Delete => app.delete_active_task(),
             KeyCode::Char(' ') => {
                 if app.active_task_index.is_some() {
                     app.previous_view = app.current_view;
@@ -587,9 +588,9 @@ fn draw_task_list(frame: &mut Frame, app: &mut App, theme: &Theme) {
     let help_text = match app.input_mode {
         InputMode::Normal => {
             if chunks[3].width > 80 {
-                " [Tab] Stats | [↑/↓] Nav | [Shift+↑/↓] Move | [n] New | [Enter] Complete | [q] Quit "
+                " [Tab] Stats | [↑/↓] Nav | [Shift+↑/↓] Move | [n] New | [Enter] Complete | [d] Delete | [q] Quit "
             } else {
-                " [Tab] [↑/↓] [S+↑/↓] [n] [Ent] [q] "
+                " [Tab] [↑/↓] [S+↑/↓] [n] [Ent] [d] [q] "
             }
         }
         InputMode::Editing => " [Enter] Submit | [Esc] Cancel ",

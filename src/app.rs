@@ -1,34 +1,23 @@
 use crate::settings::{ColorTheme, Settings};
 use chrono::{DateTime, Utc};
-use directories::UserDirs;
+use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// Helper function to get the path for the state file.
-pub fn get_data_path() -> Option<PathBuf> {
-    if let Some(user_dirs) = UserDirs::new() {
-        let mut path = user_dirs.home_dir().to_path_buf();
-        path.push(".local");
-        path.push("share");
-        path.push("pomodorust");
-        path.push("state.json");
-        return Some(path);
-    }
-    None
+const SETTINGS_ROW_COUNT: usize = 5;
+
+fn project_dirs() -> Option<ProjectDirs> {
+    ProjectDirs::from("", "", "pomodorust")
 }
 
-/// Helper function to get the path for the config file.
+pub fn get_data_path() -> Option<PathBuf> {
+    project_dirs().map(|d| d.data_local_dir().join("state.json"))
+}
+
 pub fn get_config_path() -> Option<PathBuf> {
-    if let Some(user_dirs) = UserDirs::new() {
-        let mut path = user_dirs.home_dir().to_path_buf();
-        path.push(".config");
-        path.push("pomodorust");
-        path.push("config.toml");
-        return Some(path);
-    }
-    None
+    project_dirs().map(|d| d.config_dir().join("config.toml"))
 }
 
 /// Represents a single task for the Pomodoro timer.
@@ -265,10 +254,25 @@ impl App {
                     task.completion_date = Some(Utc::now());
                     self.state = TimerState::Paused;
                     self.reset_timer();
+                    self.active_task_index = self.tasks.iter().enumerate()
+                        .find(|(_, t)| !t.completed)
+                        .map(|(i, _)| i);
                 } else {
                     task.completion_date = None;
                 }
             }
+        }
+    }
+
+    /// Deletes the currently selected active (non-completed) task.
+    pub fn delete_active_task(&mut self) {
+        if let Some(index) = self.active_task_index {
+            self.tasks.remove(index);
+            self.state = TimerState::Paused;
+            self.reset_timer();
+            self.active_task_index = self.tasks.iter().enumerate()
+                .find(|(_, t)| !t.completed)
+                .map(|(i, _)| i);
         }
     }
 
@@ -397,14 +401,14 @@ impl App {
 
     // --- Settings View Methods ---
     pub fn next_setting(&mut self) {
-        self.settings_selection = (self.settings_selection + 1) % 5; // 5 settings
+        self.settings_selection = (self.settings_selection + 1) % SETTINGS_ROW_COUNT;
     }
 
     pub fn previous_setting(&mut self) {
         if self.settings_selection > 0 {
             self.settings_selection -= 1;
         } else {
-            self.settings_selection = 4; // 5 settings, so index is 4
+            self.settings_selection = SETTINGS_ROW_COUNT - 1;
         }
     }
 
