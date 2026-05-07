@@ -55,7 +55,7 @@
 - [x] **Search / filter active task list**
   `/` key enters filter mode; typing narrows the list. Useful once the task list grows. Filter input field is replacing bottom bar with the shortcuts while used. Filter completed tasks in Statistics view as well.
 
-- [ ] **Rename / edit task name**
+- [x] **Rename / edit task name**
   No way to fix a typo without delete + recreate. Add `e` key in TaskList view to
   re-enter Editing mode with the current task name pre-filled in `current_input`.
 
@@ -70,11 +70,9 @@
   Show today's pomodoro count and focused time in the Statistics view summary block.
   Filter by `creation_date` >= start of today (already have `chrono`). maybe some nice chart ?
 
-
-
 - [ ] **Task notes / description field**
   Add optional `notes: Option<String>` to `Task`. Show and edit in TaskDetails view.
-  Allows tracking what was done in a session.
+  Allows tracking what was done in a session. we could consider using it for the search feature as well. and maybe use https://github.com/ratatui/ratatui-textarea for multi-line input.
 
 ---
 

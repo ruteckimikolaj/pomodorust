@@ -10,6 +10,7 @@ pub struct UiState {
     pub input_mode: InputMode,
     pub current_input: String,
     pub filter_input: String,
+    pub editing_task_index: Option<usize>,
 }
 
 impl Default for UiState {
@@ -21,6 +22,7 @@ impl Default for UiState {
             input_mode: InputMode::Normal,
             current_input: String::new(),
             filter_input: String::new(),
+            editing_task_index: None,
         }
     }
 }
@@ -134,14 +136,36 @@ impl UiState {
         app.active_task_index = Some(indices[prev]);
     }
 
-    pub fn submit_task(&mut self, app: &mut App) {
-        if !self.current_input.is_empty() {
-            app.tasks.push(Task::new(self.current_input.clone()));
-            self.current_input.clear();
-            if app.tasks.len() == 1 {
-                app.active_task_index = Some(0);
+    pub fn start_rename(&mut self, app: &App) {
+        if let Some(idx) = app.active_task_index {
+            if let Some(task) = app.tasks.get(idx) {
+                if !task.completed {
+                    self.editing_task_index = Some(idx);
+                    self.current_input = task.name.clone();
+                    self.input_mode = InputMode::Editing;
+                }
             }
         }
-        self.input_mode = InputMode::Normal;
+    }
+
+    pub fn submit_task(&mut self, app: &mut App) {
+        if let Some(idx) = self.editing_task_index.take() {
+            if !self.current_input.is_empty() {
+                if let Some(task) = app.tasks.get_mut(idx) {
+                    task.name = self.current_input.clone();
+                }
+            }
+            self.current_input.clear();
+            self.input_mode = InputMode::Normal;
+        } else {
+            if !self.current_input.is_empty() {
+                app.tasks.push(Task::new(self.current_input.clone()));
+                self.current_input.clear();
+                if app.tasks.len() == 1 {
+                    app.active_task_index = Some(0);
+                }
+            }
+            self.input_mode = InputMode::Normal;
+        }
     }
 }

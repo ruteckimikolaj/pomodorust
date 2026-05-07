@@ -250,6 +250,7 @@ fn handle_tasklist_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
                 app.current_view = View::Statistics;
             }
             KeyCode::Char('n') => ui.input_mode = InputMode::Editing,
+            KeyCode::Char('e') => ui.start_rename(app),
             KeyCode::Char('/') => ui.input_mode = InputMode::Filtering,
             KeyCode::Down | KeyCode::Char('j') => ui.next_filtered_task(app),
             KeyCode::Up | KeyCode::Char('k') => ui.previous_filtered_task(app),
@@ -327,6 +328,7 @@ fn handle_editing_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
         KeyCode::Esc => {
             ui.input_mode = InputMode::Normal;
             ui.current_input.clear();
+            ui.editing_task_index = None;
         }
         _ => {}
     }
