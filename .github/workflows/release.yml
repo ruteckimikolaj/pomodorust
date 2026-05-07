@@ -136,3 +136,4 @@ jobs:
           target_darwin_arm64: true
           target_linux_amd64: true
           target_linux_arm64: true
+          skip_checksum: true
