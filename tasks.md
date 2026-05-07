@@ -66,23 +66,24 @@
   Add `s` key in Timer view (or `n` for "next") to jump to the next mode immediately,
   the same as natural expiry — plays sound, shows notification, advances `next_mode`.
 
-- [ ] **Daily statistics panel**
+- [x] **Daily statistics panel**
   Show today's pomodoro count and focused time in the Statistics view summary block.
   Filter by `creation_date` >= start of today (already have `chrono`). maybe some nice chart ?
 
 - [ ] **Task notes / description field**
   Add optional `notes: Option<String>` to `Task`. Show and edit in TaskDetails view.
   Allows tracking what was done in a session. we could consider using it for the search feature as well. and maybe use https://github.com/ratatui/ratatui-textarea for multi-line input.
+- [ ] **Grouping / projects**
+  Add optional `project: Option<String>` to `Task`. Allow filtering by project in TaskList and Statistics views. Maybe add a "Projects" view that shows stats by project and lists tasks grouped by project.
+
 
 ---
 
 ## Nice-to-haves
+- [ ] **Grouping tasks by day in statistics view**
+  Instead of one long list of completed tasks, group them by day with a header for each day. This would make it easier to see daily patterns and find specific completed tasks.
 
 - [ ] **Export statistics to CSV**
   Single keybind (e.g. `x`) in Statistics view. Write completed tasks as CSV to
   `~/.local/share/pomodorust/export.csv`. Fields: name, created, completed,
   time_spent_secs, pomodoros.
-
-- [ ] **Sound volume setting**
-  `amplify(0.20)` is hardcoded in `play_sound`. Add `sound_volume: f32` to `Settings`
-  (0.0–1.0, default 0.20). Expose in settings view alongside notifications toggle.
