@@ -101,6 +101,8 @@ fn run_app(
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
     let mut ui_state = UiState::default();
+    let mut ticks_since_save: u32 = 0;
+    const AUTOSAVE_TICKS: u32 = 120; // ~30 seconds
 
     let audio_system = DeviceSinkBuilder::open_default_sink()
         .ok()
@@ -144,6 +146,11 @@ fn run_app(
                 }
             }
             last_tick = Instant::now();
+            ticks_since_save += 1;
+            if ticks_since_save >= AUTOSAVE_TICKS {
+                app.save();
+                ticks_since_save = 0;
+            }
         }
 
         if app.should_quit {
@@ -155,6 +162,11 @@ fn run_app(
 
 fn handle_key_event(key: KeyEvent, app: &mut App, ui: &mut UiState, player: Option<&Player>) {
     if key.kind != crossterm::event::KeyEventKind::Press {
+        return;
+    }
+
+    if key.code == KeyCode::Char('c') && key.modifiers == KeyModifiers::CONTROL {
+        app.should_quit = true;
         return;
     }
 

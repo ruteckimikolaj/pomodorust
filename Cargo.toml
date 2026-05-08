@@ -1,6 +1,6 @@
 [package]
 name = "pomodorust"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Mikolaj Rutecki", "Mikolaj Rutecki <ruteckimikolaj+crates.io@gmail.com>"]
 description = "A minimalist, powerful, terminal-based Pomodoro timer written in Rust"
