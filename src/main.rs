@@ -378,7 +378,7 @@ fn handle_editing_input(key: KeyEvent, app: &mut App, ui: &mut UiState) {
 }
 
 fn ui(frame: &mut Frame, app: &App, ui_state: &UiState) {
-    let theme = Theme::from_settings(app.settings.theme);
+    let theme = Theme::from_settings(app.settings.theme, app.settings.custom_theme.as_ref());
     match app.current_view {
         View::Timer => draw_timer(frame, app, &theme),
         View::TaskList => draw_task_list(frame, app, ui_state, &theme),

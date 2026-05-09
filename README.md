@@ -1,4 +1,4 @@
-![Version](https://img.shields.io/badge/version-0.2.0-blue)
+![Version](https://img.shields.io/badge/version-0.2.1-blue)
 ![https://spdx.org/licenses/CC-BY-NC-SA-4.0.json](https://img.shields.io/badge/License-CC%20%7C%20BY--NC--SA%204.0-green)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue)
 ![Rust Version](https://img.shields.io/badge/rust-1.70.0-blue)
@@ -16,7 +16,8 @@ A minimalist, powerful, terminal-based Pomodoro timer written in Rust to help yo
 - **Task Notes** — Attach multi-line notes to any task. Edit with a full-screen modal editor (`Shift+E`).
 - **Search & Filter** — Press `/` in any view to filter tasks by name, notes, or project tag in real time.
 - **Statistics** — Weekly bar chart, daily and all-time summary, and a searchable list of completed tasks with per-task details (time focused, pomodoros, dates).
-- **Four Color Themes** — Default, Dracula, Solarized, Nord. Switchable from the settings panel.
+- **Six Built-in Color Themes** — Default, Dracula, Solarized, Nord, Gruvbox Dark, Cyberpunk. Switchable from the settings panel with `←`/`→`.
+- **Custom Theme** — Define your own colors in `~/.config/pomodorust/config.toml` under `[custom_theme]`. Any unset field falls back to the Default theme. Custom appears in the cycle only when the section is present.
 - **Desktop Notifications** — Native desktop notifications when a timer segment ends.
 - **SQLite Persistence** — All tasks and app state are stored in a local SQLite database (`~/.local/share/pomodorust/pomodorust.db`). Settings persist separately as TOML (`~/.config/pomodorust/config.toml`).
 - **Cross-Platform** — Runs on macOS and Linux.
@@ -136,6 +137,27 @@ The tag is stripped from the display name and shown as a coloured badge. Filter 
 | `~/.config/pomodorust/config.toml` | Timer durations, theme, notification settings |
 
 On first launch after upgrading from an older version, existing `state.json` data is automatically migrated to SQLite.
+
+### Custom Theme
+
+Add a `[custom_theme]` table to `~/.config/pomodorust/config.toml`. All fields are optional hex strings — omit any to inherit from the Default theme.
+
+```toml
+[custom_theme]
+pomodoro_color    = "#ff2d78"
+short_break_color = "#00fff9"
+long_break_color  = "#bf00ff"
+pomodoro_bg       = "#2d0018"
+short_break_bg    = "#002028"
+long_break_bg     = "#1a0030"
+accent_color      = "#ffe600"
+base_fg           = "#e2d9f3"
+base_bg           = "#0d0221"
+running_fg        = "#39ff14"
+paused_fg         = "#ff6d00"
+highlight_bg      = "#1e0a3c"
+help_text_fg      = "#7b68ee"
+```
 
 ## ❤️ Contributing
 

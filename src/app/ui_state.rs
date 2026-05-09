@@ -80,12 +80,21 @@ impl UiState {
             1 => app.settings.short_break_duration = bump_duration_mins(app.settings.short_break_duration, delta),
             2 => app.settings.long_break_duration = bump_duration_mins(app.settings.long_break_duration, delta),
             3 => {
-                app.settings.theme = match app.settings.theme {
-                    ColorTheme::Default => ColorTheme::Dracula,
-                    ColorTheme::Dracula => ColorTheme::Solarized,
-                    ColorTheme::Solarized => ColorTheme::Nord,
-                    ColorTheme::Nord => ColorTheme::Default,
-                };
+                let mut themes = vec![
+                    ColorTheme::Default,
+                    ColorTheme::Dracula,
+                    ColorTheme::Solarized,
+                    ColorTheme::Nord,
+                    ColorTheme::GruvboxDark,
+                    ColorTheme::Cyberpunk,
+                ];
+                if app.settings.custom_theme.is_some() {
+                    themes.push(ColorTheme::Custom);
+                }
+                let cur = themes.iter().position(|t| *t == app.settings.theme).unwrap_or(0);
+                let len = themes.len() as i64;
+                let next = ((cur as i64 + delta).rem_euclid(len)) as usize;
+                app.settings.theme = themes[next];
             }
             4 => app.settings.desktop_notifications = !app.settings.desktop_notifications,
             5 => {

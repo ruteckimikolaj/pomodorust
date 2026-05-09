@@ -22,7 +22,8 @@ pub fn get_db_path() -> Option<PathBuf> {
 }
 
 pub fn get_config_path() -> Option<PathBuf> {
-    project_dirs().map(|d| d.config_dir().join("config.toml"))
+    #[allow(deprecated)]
+    std::env::home_dir().map(|h| h.join(".config").join("pomodorust").join("config.toml"))
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
